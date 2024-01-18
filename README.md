@@ -28,30 +28,31 @@ Contains scripts to run all analyses.
 
 ### [Data](./data)
 
-Contains processed data and model inputs. For raw data and to see the steps for generating model inputs, see [this repository](https://github.com/Quantitative-Conservation-Lab/Sorel_etal_2023_CJFAS).\
+Contains processed data and model inputs. For raw data and to see the steps for generating model inputs, see [this repository](https://github.com/Quantitative-Conservation-Lab/Sorel_etal_2023_CJFAS).
 
-**dat_IPM_hatch.Rdata** Data inputs to the integrated population model.\
+**dat_IPM_hatch.Rdata** Data inputs to the integrated population model.
 
-**par_IPM_hatch.Rdata** Initial parameter inputs to the model.\
+**par_IPM_hatch.Rdata** Initial parameter inputs to the model.
 
-**map_IPM_hatch.Rdata** Parameters to be treated as random effects.\
+**map_IPM_hatch.Rdata** Parameters to be treated as random effects.
 
-**rand_par_IPM_hatch.Rdata** Parameters to be fixed at initial values during fitting\
-**broodstock_remova.xlsx** Historical numbers of natural origin fish removed for hatchery broodstock.\
+**rand_par_IPM_hatch.Rdata** Parameters to be fixed at initial values during fitting
 
-**proj_arrays_hatch_8\_11_2022.Rdata** Simulated future trajectories of environmental variables included as covariates in the population model
+**broodstock_remova.xlsx** Historical numbers of natural origin fish removed for hatchery broodstock.
+
+**proj_arrays_hatch_8\_11_2022.Rdata** Simulated future trajectories of environmental variables included as covariates in the population .
 
 ### [Results](./results)
 
-Contains raw and processed results\
+Contains raw and processed results
 
-**ipm_fit_non_centered_4\_13_hatch_scen.Rdata** The TMB integrated population model object. This is used to conducted the population projections using posterior samples of parameters, simulated environmental variables, and random draws of random effects of year.\
+**ipm_fit_non_centered_4\_13_hatch_scen.Rdata** The TMB integrated population model object. This is used to conducted the population projections using posterior samples of parameters, simulated environmental variables, and random draws of random effects of year.
 
 **list_of_draws.rda** This file contains posterior samples from the integrated population model.
 
-**list_of_sims_8\_11_22.Rdata** Raw results of population projection simulations under alternative management strategies. This file is too big for GitHub but is available for download on [Zenodo](https://zenodo.org/records/10526151). The 'PVA-preliminary-results-scenarios.Rmd' file has code (line 477) to download the file from Zenodo into the correct place in the file directory.\
+**list_of_sims_8\_11_22.Rdata** Raw results of population projection simulations under alternative management strategies. This file is too big for GitHub but is available for download on [Zenodo](https://zenodo.org/records/10526151). The 'PVA-preliminary-results-scenarios.Rmd' file has code (line 477) to download the file from Zenodo into the correct place in the file directory.
 
-**summarized_sims_01_17_24.Rdata** Processed and summarized results of population projection simulations.\
+**summarized_sims_01_17_24.Rdata** Processed and summarized results of population projection simulations.
 
 **2_panel_map_elev_9242021.png** Map used in the manuscript.
 
