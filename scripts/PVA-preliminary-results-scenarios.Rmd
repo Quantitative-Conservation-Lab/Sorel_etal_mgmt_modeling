@@ -1,0 +1,731 @@
+---
+title: "PVA preliminary results with hatchery"
+author: "Mark Sorel"
+date: "12/16/2021"
+output: word_document
+---
+
+
+```{r include-FALSE, message=FALSE, warning=FALSE,echo=FALSE}
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE)
+```
+
+```{r libraries, message=FALSE, warning=FALSE,echo=FALSE}
+library(here)
+library(TMB)
+library(TMBhelper)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(stringr)
+library(forcats)
+library(viridisLite)
+library(readxl)
+
+# scalars for habitat restoration strategies
+##natal stream restoration
+NS_scalars<-tibble(Scenario = "NS",Lifestage=rep(c("Egg","Summer","Winter"),each=4),LHP=rep(c("Spr.0","Sum.0","Fal.0","Spr.1"),times=3),
+       Rate=c(rep(1.1,4),1,1.05,1.1,1.1,1,1,1,1.1)) %>% pivot_wider(names_from = Lifestage,values_from = Rate) %>% 
+  mutate(Total=Egg*Summer*Winter)
+
+## downstream restoration
+DS_scalars<-tibble(Scenario = "DS",Lifestage=rep(c("Egg","Summer","Winter"),each=4),LHP=rep(c("Spr.0","Sum.0","Fal.0","Spr.1"),times=3),
+       Rate=c(rep(1,4),1.1,1.05,1.0,1.0,1.1,1.1,1.1,1.0 )) %>% pivot_wider(names_from = Lifestage,values_from = Rate) %>% 
+  mutate(Total=Egg*Summer*Winter)
+
+
+```
+
+
+
+```{r do_sim,eval=FALSE,echo=FALSE}
+#Population projections
+##load model object
+setwd(here("src"))
+TMB::compile("IPM_non_centered_hatchery_scenarios.cpp")
+dyn.load(dynlib("IPM_non_centered_hatchery_scenarios"))
+
+load(here("results","ipm_fit_non_centered_4_13_hatch_scen.Rdata"))
+
+
+
+##load posterior samples. 
+load(here("results","list_of_draws.rda"))
+
+
+#*************************************
+# model is fit to redds in years 1996-2019
+# projection is years 2020-2069
+#*************************************
+
+# set some parameters for simulations
+mod$env$data$proj_years<-50 #number of projections years
+dat_IPM<-mod$env$data
+dat_IPM$proj_years<-50
+mod$env$data$bs_prop<-c(.3,.3)# maximum proporiton of natural origin returns to take for broodstock
+mod$env$data$Hmax<-c(400,100) # maximum hatchery origin spawners
+mod$env$data$BS_Max<-c(74,64) #hatchery broodstock proportions
+mod$env$data$Hslope<-c(1,1) # number of hatchery origin spawners to allow per natural origin spawner up to Hmax
+mod$env$data$NS_restoration_scalar<-rep(1,4) # start at baseline habitat
+mod$env$data$DS_restoration_scalar<-rep(1,4)# start at baseline habitat
+
+
+# number of simulations to do for each posterior samples
+n_sims_per_par<-100
+
+## objects to hold outputs of simulations
+total_years<-dat_IPM$last_t+mod$env$data$proj_years
+sim_out<-sim_pHOS<-sim_p_female<-array(NA,dim=c(dim(sim$S_hat),dim(list_of_draws)[1]*n_sims_per_par))
+
+sim_hatch_ret_a<-array(NA,dim<-c(mod$env$data$proj_years,dim(sim$hatch_ret_a)[2],dim(list_of_draws)[1]*n_sims_per_par))
+
+
+sim_NOB<-sim_BS_tot<-array(NA,dim=c(dim(sim$broodstock_proj),dim(list_of_draws)[1]*n_sims_per_par))
+
+sim_BS<-array(NA,dim=c(dim(sim$broodstock_proj),dim(list_of_draws)[1]*n_sims_per_par))
+
+
+
+#indices of parameters to save
+p_fem_loc<-which(names(mod$env$last.par.best)=="mu_fem")
+
+PSM_loc<-which(names(mod$env$last.par.best)=="mu_pss")
+
+doy_loc<-which(names(mod$env$last.par.best)=="beta_DOY")
+
+RRS_loc<-which(names(mod$env$last.par.best)=="logit_RRS")
+
+
+#names of the parameters save
+par_names<-c(
+"PSM",
+"logit_RRS")
+
+#array to hold parameters
+sim_pars_array<-array(NA,dim=c(length(par_names),3,(dim(list_of_draws)[1]*n_sims_per_par)),dimnames = list(par_names,c("Chiwawa","Nason","White"),1:(dim(list_of_draws)[1]*n_sims_per_par)))
+
+
+
+## load environmental covariate projections for ismulations
+load(file=here("data/proj_arrays_hatch_8_11_2022.Rdata"))
+
+
+# object with baseline and natal stream restoration survival scalars
+NS_scalar<-list(
+baseline=rep(1,4),
+restoration=NS_scalars$Total
+)
+
+# object with baseline downstream restoration survival scalars
+DS_scalar<-list(
+baseline=rep(1,4),
+restoration=DS_scalars$Total #1+c(.2,.2,.1,.025)
+)
+
+# object with baseline and reduced hatchery broodstock size targets
+BS_size<-list(
+  baseline=c(74,64),
+  reduced=(c(74,64)*.5)
+)
+
+# to hold output of sims with different management strategies
+list_of_sims<-list()
+list_counter<-1
+gc()
+#main projection 
+start<-Sys.time()
+
+#loop over management strategies. This takes an hour or so. 
+for(NS in 1:2){
+  mod$env$data$NS_restoration_scalar<-NS_scalar[[NS]]
+  for(DS in 1:2){
+    mod$env$data$DS_restoration_scalar<-DS_scalar[[DS]]
+    for(BS in 1:2){
+      mod$env$data$BS_Max<-BS_size[[BS]]
+       
+n_env<-dim(proj_arrays$x_proj_array)[3]      
+      
+set.seed(1234)
+count<-1
+for ( i in 1:(dim(list_of_draws)[1])){
+for(j in 1:n_sims_per_par){
+
+mod$env$data$X_proj <-( proj_arrays$x_proj_array[,,j] %>% as("dgTMatrix"))
+mod$env$data$X_phi_proj <- (proj_arrays$phi_proj_array[,,j] %>% as("dgTMatrix"))
+set.seed(j)
+sim<-mod$simulate(par=list_of_draws[i,])
+sim_out[,,count]<-sim$S_hat   #natural-origin female spawners
+sim_NOB[,,count]<-sim$broodstock_proj
+sim_BS_tot[,,count]<-sim$total_broodstock[25:74,]
+sim_hatch_ret_a[,,count] <- sim$hatch_ret_a[25:74,]
+
+count_ts<-0
+count_ts2<-0
+count_tsl<-0
+  for(t in 1:(total_years)){
+    for(s in 1:dat_IPM$n_s){
+      if(t<(dat_IPM$first_t[s]+1)){next}
+
+          count_ts<-count_ts+1
+          sim_pHOS[t,s,count]<-sim$pHOS[count_ts]               #pHOS
+          
+       if(t>=(dat_IPM$first_t[s]+6)){
+                       count_ts2<-count_ts2+1
+      sim_p_female[t,s,count]<-sim$p_female[count_ts2]       #pFemale
+       }
+
+    }
+  } 
+
+
+
+sim_pars_array[1,,count]<-plogis(list_of_draws[i,PSM_loc])
+
+sim_pars_array[2,,count]<-plogis(list_of_draws[i,RRS_loc])
+
+count<-count+1
+}
+
+}
+
+
+sim_list<-list(
+  sim_hatch_ret_a=sim_hatch_ret_a,
+  sim_pars_array=sim_pars_array,
+ sim_out=sim_out,
+sim_pHOS=sim_pHOS,
+sim_p_female=sim_p_female,
+
+sim_NOB=sim_NOB,
+sim_BS_tot=sim_BS_tot,
+BS_Max=mod$env$data$BS_Max,
+NS_restoration_scalar=mod$env$data$NS_restoration_scalar,
+DS_restoration_scalar=mod$env$data$DS_restoration_scalar,
+BS_scenario=names(BS_size)[[BS]],
+DS_scenario=names(DS_scalar)[[DS]],
+NS_scenario=names(NS_scalar)[[NS]]
+)
+
+list_of_sims[[list_counter]]<-sim_list
+
+list_counter<-list_counter+1
+print(list_counter)
+    }
+  }
+}
+end<-Sys.time()
+end-start
+
+# end of loop over management strategies
+
+# save simulation results
+save(list_of_sims,file=here("results","list_of_sims_8_11_22.Rdata"))
+
+rm(list=ls())
+```
+
+```{r sum_sim_func,eval=FALSE,echo=FALSE}
+# function to sumarize simulation results into useful metrics like geometric mean abunance, quasi extinction risk, pHOS, pNOB, and PNI
+sum_func<-function(sims_I,do_baseline=F,baseline=NULL){
+  sim_num=1
+##geomean natural origin female abundance
+# 
+  with(sims_I,
+     {
+  
+sim_S_wild<-sim_out*(1-sim_pHOS)
+
+sim_S_wild_all<-sim_S_wild/sim_p_female #add males
+
+
+
+ dat_w_tots<-sim_S_wild_all %>%abind::abind(apply(sim_S_wild_all,c(1,3),sum),along=2)
+ 
+ 
+ 
+
+# geometric mean wild spawners in year 20-50 of projection
+geo_mean<-apply(dat_w_tots[sim_sum_yrs+3,,],2:3,function(x){
+  exp(sum(log(x)/length(x))) 
+})
+
+
+
+#summarized  by stream
+geo_mean_sum<-apply(geo_mean,1,quantile,probs=c(.05,.25,.5,.75,.95),na.rm=T) %>% t() %>% as_tibble()  %>% `colnames<-` (1:5)%>% mutate(stream=c("Chiwawa","Nason","White","Total"),                                                                                  stream=fct_relevel(stream,c("Chiwawa","Nason","White","Total"))) %>% mutate(scenario=sim_num,var="abund",Hatchery=BS_scenario,Natal_stream=NS_scenario,Downstream=DS_scenario)
+print(sum(is.na(geo_mean))/length(geo_mean))
+
+if(do_baseline){
+  
+  perc_change<-(geo_mean-baseline[[2]]$geo_mean)/baseline[[2]]$geo_mean
+  print(sum(is.na(perc_change))/length(perc_change))
+  geo_mean_sum_perc_change<-apply(perc_change,1,quantile,probs=c(.05,.25,.5,.75,.95),na.rm=T) %>% t() %>% as_tibble()  %>% `colnames<-` (1:5)%>% mutate(stream=c("Chiwawa","Nason","White","Total"),                                                                                  stream=fct_relevel(stream,c("Chiwawa","Nason","White","Total"))) %>% mutate(scenario=sim_num,var="abund",Hatchery=BS_scenario,Natal_stream=NS_scenario,Downstream=DS_scenario)
+  
+}
+
+
+#----------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------
+
+## probability of low abundance threshold
+sim_S_wild_tot<- apply(sim_S_wild_all,c(1,3),sum)#total across streams
+sim_S_wild_w_tot<-sim_S_wild_all %>% abind::abind(sim_S_wild_tot,along=2)#add total to individual streams
+
+
+running_mean<-apply(sim_S_wild_w_tot[sim_sum_yrs+3,,],2:3,function(x){
+  out<-numeric(length(x)-3)
+  for ( i in 1:(length(x)-3)) out[i]<-mean(x[i:(i+3)])
+  return(out)
+})
+
+
+
+
+QET_classification<-apply(running_mean,2:3,function(x){min(x,na.rm=T)<50})
+
+# pQET<-apply(QET_classification,1,sum)/apply(QET_classification,1,length)
+
+
+pQET_boot<-matrix(NA,dim(sim_out)[3]/100,4)
+# QET_year_boot<- array(NA,dim=c(dim(QET_year)[1:2],dim(sim_out)[3]/100)) 
+
+ind<-1:100
+for (i in 1:(dim(sim_out)[3]/100)){
+  # ind<-sample(1:(dim(sim_out)[3]),100)
+  samp_i<-(QET_classification[,ind])
+  pQET_i<-apply(samp_i,1,sum)/100
+  pQET_boot[i,]<-pQET_i
+
+ ind<-ind+100 
+ pQET_boot
+}
+
+
+pQET_boot_quant<-apply(pQET_boot,2,quantile,probs=c(.05,.25,.5,.75,.95)) %>% t() %>% as_tibble()  %>% `colnames<-` (1:5)%>% mutate(stream=c("Chiwawa","Nason","White","Total"),                                                                                  stream=fct_relevel(stream,c("Chiwawa","Nason","White","Total")))%>% mutate(scenario=sim_num,var="pLAT",Hatchery=BS_scenario,Natal_stream=NS_scenario,Downstream=DS_scenario)
+
+
+if(do_baseline){
+  
+  perc_change<-(pQET_boot-baseline[[2]]$pQET_boot)
+  
+
+  pQET_boot_perc_change<-apply(perc_change,2,quantile,probs=c(.05,.25,.5,.75,.95),na.rm=T) %>% t() %>% as_tibble()  %>% `colnames<-` (1:5)%>% mutate(stream=c("Chiwawa","Nason","White","Total"),                                                                                  stream=fct_relevel(stream,c("Chiwawa","Nason","White","Total")))%>% mutate(scenario=sim_num,var="pLAT",Hatchery=BS_scenario,Natal_stream=NS_scenario,Downstream=DS_scenario)
+  
+}
+
+#----------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------
+
+##pHOS
+
+pHOS_tot<-matrix(NA,nrow=dim(sim_pHOS)[1],ncol=dim(sim_pHOS)[3])
+for(year in 1:dim(sim_pHOS)[1]){
+  for(Iter in 1:dim(sim_pHOS)[3]){
+    pHOS_tot[year,Iter]<-weighted.mean(sim_pHOS[year,,Iter],sim_S_wild_all[year,,Iter])
+  }
+}
+
+pHOS_w_tot<- sim_pHOS %>% abind::abind(pHOS_tot,along=2)#add total to individual streams
+
+# geometric mean wild pHOS in year 20-50 of projection
+mean_pHOS<-apply(pHOS_w_tot[sim_sum_yrs+3,,],2:3,function(x){
+  mean(x)
+})
+
+#summarized geomeans by stream
+mean_pHOS_sum<-apply(mean_pHOS,1,quantile,probs=c(.05,.25,.5,.75,.95))
+
+
+mean_pHOS_out<-mean_pHOS_sum %>% `colnames<-` (c("Chiwawa","Nason","White","Total")) %>% as_tibble() %>% mutate(quants=1:5) %>%  pivot_longer(1:4, names_to="stream") %>% pivot_wider(names_from =  quants)%>% mutate(scenario=sim_num,var="pHOS",Hatchery=BS_scenario,Natal_stream=NS_scenario,Downstream=DS_scenario)
+
+
+if(do_baseline){
+  
+  perc_change<-(mean_pHOS-baseline[[2]]$mean_pHOS)#/baseline[[2]]$mean_pHOS
+  # print(sum(is.na(perc_change))/length(perc_change))
+perc_change_pHOS_sum<-apply(perc_change,1,quantile,probs=c(.05,.25,.5,.75,.95),na.rm=T)
+
+
+mean_pHOS_out_perc_change<-perc_change_pHOS_sum %>% `colnames<-` (c("Chiwawa","Nason","White","Total")) %>% as_tibble() %>% mutate(quants=1:5) %>%  pivot_longer(1:4, names_to="stream") %>% pivot_wider(names_from =  quants)%>% mutate(scenario=sim_num,var="pHOS",Hatchery=BS_scenario,Natal_stream=NS_scenario,Downstream=DS_scenario)
+
+  
+}
+#----------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------
+
+##pNOB
+sim_pNOB<-sim_NOB
+#calculate pNOB in projection years
+sim_pNOB[,1,]<-sim_pNOB[,1,]/sim_BS_tot[,1,]
+sim_pNOB[,2,]<-sim_pNOB[,2,]/sim_BS_tot[,2,]
+
+
+
+#fill with projection
+pNOB_with_obs[seq(25,length= dat_IPM$proj_years),,]<-sim_pNOB
+
+
+# mean PNOB
+mean_pNOB<-apply(pNOB_with_obs[sim_sum_yrs+3,,],2:3,function(x){
+  mean(x)
+})
+
+#summarized mean by stream
+mean_pNOB_sum<-apply(mean_pNOB,1,quantile,probs=c(.05,.25,.5,.75,.95))
+
+
+mean_pNOB_out<-mean_pNOB_sum %>% `colnames<-` (c("Chiwawa","Nason")) %>% as_tibble() %>% mutate(quants=1:5) %>%  pivot_longer(1:2, names_to="stream") %>% pivot_wider(names_from =  quants)%>% mutate(scenario=sim_num,var="pNOB",Hatchery=BS_scenario,Natal_stream=NS_scenario,Downstream=DS_scenario)
+
+if(do_baseline){
+  
+  perc_change<-(mean_pNOB-baseline[[2]]$mean_pNOB)#/baseline[[2]]$mean_pNOB
+  # print(sum(is.na(perc_change))/length(perc_change))
+perc_change_mean_pNOB<-apply(perc_change,1,quantile,probs=c(.05,.25,.5,.75,.95),na.rm=T)
+
+
+mean_pNOB_out_perc_change<-perc_change_mean_pNOB %>% `colnames<-` (c("Chiwawa","Nason")) %>% as_tibble() %>% mutate(quants=1:5) %>%  pivot_longer(1:2, names_to="stream") %>% pivot_wider(names_from =  quants)%>% mutate(scenario=sim_num,var="pNOB",Hatchery=BS_scenario,Natal_stream=NS_scenario,Downstream=DS_scenario)
+
+  
+}
+
+#----------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------
+
+##PNI
+#calculate pNI in projection years
+sim_pNI<-pNOB_with_obs/(pNOB_with_obs+sim_pHOS[,1:2,])
+
+
+# mean PNI
+mean_pNI<-apply(sim_pNI[sim_sum_yrs+3,,],2:3,function(x){
+  mean(x,na.rm=TRUE)
+})
+
+print(sum(is.na(sim_pNI[sim_sum_yrs+3,,]))/length(sim_pNI[sim_sum_yrs+3,,]))
+
+#summarized PNI by stream
+mean_pNI_sum<-apply(mean_pNI,1,quantile,probs=c(.05,.25,.5,.75,.95))
+
+
+mean_pNI_out<-mean_pNI_sum %>% `colnames<-` (c("Chiwawa","Nason")) %>% as_tibble() %>% mutate(quants=1:5) %>%  pivot_longer(1:2, names_to="stream") %>% pivot_wider(names_from =  quants)%>% mutate(scenario=sim_num,var="PNI",Hatchery=BS_scenario,Natal_stream=NS_scenario,Downstream=DS_scenario)
+
+
+
+if(do_baseline){
+  
+  perc_change<-(mean_pNI-baseline[[2]]$mean_pNI)#/baseline[[2]]$mean_pNI
+  # print(sum(is.na(perc_change))/length(perc_change))
+perc_change_mean_pNI<-apply(perc_change,1,quantile,probs=c(.05,.25,.5,.75,.95),na.rm=T)
+
+
+mean_pNI_out_perc_change<-perc_change_mean_pNI %>% `colnames<-` (c("Chiwawa","Nason")) %>% as_tibble() %>% mutate(quants=1:5) %>%  pivot_longer(1:2, names_to="stream") %>% pivot_wider(names_from =  quants)%>% mutate(scenario=sim_num,var="PNI",Hatchery=BS_scenario,Natal_stream=NS_scenario,Downstream=DS_scenario)
+
+  
+}
+
+
+
+
+  
+sum_sim<-bind_rows(geo_mean_sum,pQET_boot_quant,mean_pHOS_out,mean_pNOB_out,mean_pNI_out)
+
+
+sims_out<-
+list(
+geo_mean=geo_mean,
+pQET_boot=pQET_boot,
+mean_pHOS=mean_pHOS,
+mean_pNOB=mean_pNOB,
+mean_pNI=mean_pNI
+)
+
+if(do_baseline){
+ perc_change<-bind_rows(
+   geo_mean_sum_perc_change=geo_mean_sum_perc_change,
+   pQET_boot_perc_change=pQET_boot_perc_change,
+   mean_pHOS_out_perc_change=mean_pHOS_out_perc_change,
+   mean_pNOB_out_perc_change=mean_pNOB_out_perc_change,
+   mean_pNI_out_perc_change=mean_pNI_out_perc_change
+ ) 
+}else{
+  perc_change<-NULL
+}
+
+
+return(list(sum_sim=sum_sim,sims_out=sims_out,perc_change=perc_change))
+}
+)
+
+}
+
+
+```
+
+
+```{r sumarize sims,eval=FALSE,echo=FALSE}
+
+## load simulation results. 
+# file is available for download at https://zenodo.org/records/10526151
+if(!file.exists(here("results","list_of_sims_8_11_22.Rdata"))){
+  
+  download.file(url="https://zenodo.org/records/10526151/files/list_of_sims_8_11_22.Rdata?download=1",destfile=here("results","list_of_sims_8_11_22.Rdata"),timeout=200)
+  
+}
+load(file=here("results","list_of_sims_8_11_22.Rdata"))
+
+# load model object (will use some of information on years from it)
+load(here("results","ipm_fit_non_centered_4_13_hatch_scen.Rdata"))
+
+dat_IPM<-mod$env$data
+dat_IPM$proj_years<-50
+sim_sum_yrs<-(dat_IPM$last_t+1-3):(dat_IPM$last_t+dat_IPM$proj_years-3)
+
+#read data on historical pNOB
+broodstock_dat<-read_excel(here("data","broodstock_remova.xlsx"),sheet=2)
+
+#create an array to fill with historical and projected pNOB
+pNOB_with_obs<-array(NA,dim=c(dim(list_of_sims[[1]]$sim_out)[1],dim(list_of_sims[[1]]$sim_NOB)[2:3]))
+#fill with historical
+##CHiwawa
+pNOB_with_obs[1:24,1,]<-broodstock_dat %>% filter(Year<=2019 & Year >=(2019-23) & Program=="Chiwawa") %>% pull(pNOB) %>% as.numeric()
+##Nason
+pNOB_with_obs[1:24,2,]<-broodstock_dat %>% filter(Year<=2019 & Year >=(2019-23) & Program=="Nason") %>% pull(pNOB) %>% as.numeric()
+
+#summarize the baseline strategy
+baseline_sum<-sum_func(list_of_sims[[1]])
+
+#tibble to hold outputs of all summarized simulations
+summarized_sims<-as_tibble(baseline_sum$sum_sim)
+
+
+#holds outputs of summarize percent change quantiles
+summarized_sims_perc_change<-as_tibble(baseline_sum$perc_change)
+
+#loop through management stratgy simulations and summarize
+ for ( sim_num in 2:length(list_of_sims)){
+sum_I<-sum_func(list_of_sims[[sim_num]],TRUE,baseline_sum)
+   summarized_sims<- bind_rows(summarized_sims,sum_I$sum_sim)
+   summarized_sims_perc_change<- bind_rows(summarized_sims_perc_change,sum_I$perc_change)
+  
+ }
+
+#save summarized simulations
+out<-list(summarized_sims=summarized_sims,
+          summarized_sims_perc_change=summarized_sims_perc_change)
+
+save(out,file=here("results","summarized_sims_01_17_24.Rdata"))
+
+```
+
+```{r print_func}
+# load summarized simulations
+load(file=here("results","summarized_sims_01_17_24.Rdata"))
+
+# function to print median and 90% intervals for different metrics and managment strategies
+pc_fun<-function(s,v,h="baseline",ns="baseline",ds="baseline",r=2,cit=""){
+
+
+  x<-out$summarized_sims_perc_change %>% filter(stream==s&var==v&
+                                    Hatchery==h&Natal_stream==ns&Downstream==ds) %>% 
+    mutate(across(`1`:`5`,round,r))
+  
+  paste0(x[,3]*100,"% (",cit,paste(x[,c(1,5)]*100,collapse=", "),")")
+}
+```
+
+```{r captioner, echo=FALSE}
+#captions for tables and figures
+
+library(captioner)
+tab_nums <- captioner("Table")
+tab_nums("scenarios", "Table of habitat restoration scenario scalars for life-stage survival rates.",display=FALSE)
+
+#------------------------------------------
+#------------------------------------------
+#------------------------------------------
+
+fig_nums <- captioner()
+
+fig_nums("map", "Maps of the Wenatchee River Basin",display=FALSE)
+
+fig_nums("IPM_diagram", "Conceptual diagram of population model. Square boxes represent population states (i.e. life stage abundances), and arrows connecting boxes represent demographic rates (i.e., juvenile production, survival, and maturation). Green boxes are directly informed by abundance data, whereas white boxes are not. Orange arrows are directly informed by mark-recapture data whereas black lines are not. Red ovals represent auxiliary data that inform population states and demographic rates.",display=FALSE)
+
+fig_nums("hab_concept", "Conceptual diagram showing excpected relationships between habitat resotration actions, habitat attributes, and life stage survival. Based on RTT doc",display=FALSE)
+
+
+fig_nums("BP", "Boxplots of simulated geometic mean natural-origin spawner abundance over 50 (Abundance), the probability of the four-year running mean natural-origin  spawner abundance falling below a low abundance threshold of 50 (pQET), the proportion of spawners that are of hatchery origin (pHOS), the proportion of hatchery broodstock that are of natural origin (pNOB), and Proportianate Natural Influence (PNI) by natal stream and management scenario. Box color represents habitat scenario and box shading represents hatchery broodstock size target scenarios. Within each boxplot, the center line represents the median across simulations, the box spans the interquartile range, and the whiskers span the 90% quantile.",display=FALSE)
+
+
+fig_nums("BP_pC", "Boxplots of simulated geometic mean natural-origin  abundance from the baseline scenario, and difference from the baseline scenario in the proportion of projections in which the four-year running mean of natural-origin female spawner abundance fell below a low-abundance threshold of 50 ($p^{QET}$) ,Proportion of spawners that were of hatchery origin ($p^{{HOS}}$), Proportion of broodstock that are of natural origin ($p^{NOB}$) , and Proportionate natural influence (PNI) ",display=FALSE)
+```
+
+# Results
+
+For the baseline hatchery scenario, restoration of natal stream habitat led to a `r pc_fun("Chiwawa","abund",ns="restoration",cit="90% CI = ")` change in the geometric mean of projected natural-origin female spawner abundance in the  Chiwawa River, `r pc_fun("Nason","abund",ns="restoration")` in Nason Creek, `r pc_fun("White","abund",ns="restoration")` in the White River, and `r pc_fun("Total","abund",ns="restoration")` in the total (Figure X). Restoration of downstream rearing habitat led to a `r pc_fun("Chiwawa","abund",ds="restoration")` change in abundance in the Chiwawa River,  `r pc_fun("Nason","abund",ds="restoration")` in Nason Creek, `r pc_fun("White","abund",ds="restoration")` in the White River, and `r pc_fun("Total","abund",ds="restoration")` in the total (Figure X). In the baseline habitat scenario, reducing hatchery broodstock size targets led to a `r pc_fun("Chiwawa","abund",h="reduced")` change in abundance in the Chiwawa River, `r pc_fun("Nason","abund",h="reduced")` in Nason Creek, `r pc_fun("White","abund",h="reduced")` in the White River, and `r pc_fun("Total","abund",h="reduced")` in the total. 
+
+
+
+In the baseline hatchery scenario, the difference in $p^{\text{LAT}}$ between the natal stream restoration and baseline habitat scenario was `r pc_fun("Chiwawa","pLAT",ns="restoration")` in the Chiwawa River, `r pc_fun("Nason","pLAT",ns="restoration")` in Nason Creek, and `r pc_fun("White","pLAT",ns="restoration")` in the White River. The difference in $p^{\text{LAT}}$ between the downstream restoration and baseline habitat scenarios was `r pc_fun("Chiwawa","pLAT",ds="restoration")`  in the Chiwawa River, `r pc_fun("Nason","pLAT",ds="restoration")` in Nason Creek, and `r pc_fun("White","pLAT",ds="restoration")` in the White River. In the baseline habitat scenario, the difference in $p^{\text{LAT}}$ between the reduced hatchery and baseline hatchery scenarios was `r pc_fun("Chiwawa","pLAT",h="reduced")`in the Chiwawa River, `r pc_fun("Nason","pLAT",h="reduced")` in Nason Creek, and `r pc_fun("White","pLAT",h="reduced")` in the White River. The probability of the aggregate population falling below an average of 15 natural-origin female spawners over four years was <0.01% across all scenarios.
+
+In the baseline hatchery scenario, the difference in $p^{\text{HOS}}$ between natal stream restoration and baseline habitat was `r pc_fun("Chiwawa","pHOS",ns="restoration")` in the Chiwawa River, `r pc_fun("Nason","pHOS",ns="restoration")` in Nason Creek, and `r pc_fun("White","pHOS",ns="restoration")` in the White River, and `r pc_fun("Total","pHOS",ns="restoration")` in the total. The difference in $p^{\text{HOS}}$ between downstream restoration and baseline habitat scenarios was `r pc_fun("Chiwawa","pHOS",ds="restoration")` in the Chiwawa River, `r pc_fun("Nason","pHOS",ds="restoration")` in Nason Creek, `r pc_fun("White","pHOS",ds="restoration")` in the White River, and `r pc_fun("Total","pHOS",ds="restoration")` in the total. In the baseline habitat scenario, the difference in $p^{\text{HOS}}$ betweeb the reduced and baseline hatchery broodstock size target scenarios was `r pc_fun("Chiwawa","pHOS",h="reduced")`  in the Chiwawa River, `r pc_fun("Nason","pHOS",h="reduced")` in Nason Creek, `r pc_fun("White","pHOS",h="reduced")` in the White River, and `r pc_fun("Total","pHOS",h="reduced")` in the total. 
+
+
+In the baseline hatchery scenario, the difference in $p^{\text{NOB}}$ between the natal stream restoration and baseline habitat scenarios was `r pc_fun("Chiwawa","pNOB",ns="restoration")` for the Chiwawa River Program and `r pc_fun("Nason","pNOB",ns="restoration")` for the Nason Creek Program. The difference in $p^{\text{NOB}}$ between the downstream restoration and baseline habitat scenarios was `r pc_fun("Chiwawa","pNOB",ds="restoration")` in the Chiwawa River Program and `r pc_fun("Nason","pNOB",ds="restoration")` in the Nason Creek program. In the baseline habitat scenario, the difference in $p^{\text{NOB}}$ between the reduced and baseline hatchery broodstock size target scenarios was  `r pc_fun("Chiwawa","pNOB",h="reduced")` for the Chiwawa River Program and `r pc_fun("Nason","pNOB",h="reduced")` for the Nason Creek Program.
+
+In the baseline hatchery scenario, the difference in $\text{PNI}$ between the natal stream restoration and baseline habitat scenarios was `r pc_fun("Chiwawa","PNI",ns="restoration")` for the Chiwawa River Program and `r pc_fun("Nason","PNI",ns="restoration")` for the Nason Creek Program. The difference in $\text{PNI}$ between the downstream restoration and baseline habitat scenarios was `r pc_fun("Chiwawa","PNI",ds="restoration")` in the Chiwawa River Program and `r pc_fun("Nason","PNI",ds="restoration")` in the Nason Creek program. In the baseline habitat scenario, the difference in $\text{PNI}$ between the reduced and baseline hatchery broodstock size target scenarios was  `r pc_fun("Chiwawa","PNI",h="reduced")` for the Chiwawa River Program and `r pc_fun("Nason","PNI",h="reduced")` for the Nason Creek Program.
+
+```{r boxplot_func, echo=FALSE}
+## function to plot summaries of simulations
+
+bp_func<-function(dat,pref1="Mean natural-origin\n abundance",pref2="Quasi-extinction prob.",pref3="Proportion"){
+
+ymin<-dat %>% filter(!grepl("abund",var)) %>% pull(`1`) %>% min()
+
+ymax<-dat %>% filter(!grepl("abund",var)) %>% pull(`5`) %>% max()
+
+
+#---------------------
+
+p1<-dat %>% mutate(var=case_when(var=="abund"~"Abundance",
+                                            # var=="abund"~"Abundance ",
+                                 
+                                            TRUE~var),
+  var=fct_relevel(var,c("Abundance","pLAT","pHOS","pNOB","PNI")),
+                           stream=fct_relevel(stream,c("Chiwawa","Nason","White","Total")),
+                           Scenario=case_when((Natal_stream=="baseline"&Downstream=="baseline")~"Baseline",
+                                              (Natal_stream!="baseline"&Downstream=="baseline")~"Natal restored",
+                                              (Natal_stream=="baseline"&Downstream!="baseline")~"Downstream restored",
+                                              (Natal_stream!="baseline"&Downstream!="baseline")~"Both restored"
+                                              ),
+                           Habitat=fct_relevel(Scenario,c("Baseline","Natal restored","Downstream restored","Both restored")),
+  Hatchery=ifelse(Hatchery=="baseline","Baseline","Reduced")) %>%
+  
+  filter(var%in%c("Abundance ","Abundance")) %>%
+ ggplot( aes(x=stream,fill=Habitat,alpha=Hatchery)) +
+  geom_boxplot(
+   aes(ymin = `1`, lower = `2`, middle = `3`, upper = `4`, ymax = `5`),
+   stat = "identity"
+ )+facet_wrap(~stream,scales = "free",dir="v",nrow=1)+ 
+  
+  scale_fill_brewer(palette="Dark2",guide=guide_legend(nrow=2,order=1))+scale_alpha_manual(values=c(1,.5),guide=guide_legend(override.aes = list(fill = "black") ,nrow=2,order=2))  +theme(legend.position = "top", strip.background = element_blank(),
+  strip.text.x = element_blank())+xlab("")+ylab(pref1)
+
+
+
+
+p2<-dat %>% mutate(var=case_when(var=="abund"&stream%in%c("Chiwawa","Total")~"Abundance",
+                                            var=="abund"~"Abundance ",
+                                            TRUE~var),
+  var=fct_relevel(var,c("Abundance","Abundance ","pLAT","pHOS","pNOB","PNI")),
+                           stream=fct_relevel(stream,c("Chiwawa","Nason","White","Total")),
+                           Scenario=case_when((Natal_stream=="baseline"&Downstream=="baseline")~"Baseline",
+                                              (Natal_stream!="baseline"&Downstream=="baseline")~"Natal restored",
+                                              (Natal_stream=="baseline"&Downstream!="baseline")~"Downstream restored",
+                                              (Natal_stream!="baseline"&Downstream!="baseline")~"Both restored"
+                                              ),
+                           Habitat=fct_relevel(Scenario,c("Baseline","Natal restored","Downstream restored","Both restored")),
+  Hatchery=ifelse(Hatchery=="baseline","Baseline","Reduced")) %>%
+  
+  filter(var%in%c("pLAT")&stream=="Total") %>%
+  mutate(var=case_when(var=="pLAT"~"Low abundundance threshold",
+                       var=="pHOS"~"Hatchery origin spawners"),
+          var=fct_relevel(var,c("Low abundundance threshold","Hatchery origin spawners"))) %>% 
+ ggplot( aes(x=stream,fill=Habitat,alpha=Hatchery)) +
+  geom_boxplot(
+   aes(ymin = `1`, lower = `2`, middle = `3`, upper = `4`, ymax = `5`),
+   stat = "identity"
+ )+facet_wrap(~var,scales = "free_y",dir="v",nrow=2)+ 
+  
+  scale_fill_brewer(palette="Dark2")+scale_alpha_manual(values=c(1,.5),guide=guide_legend(override.aes = list(fill = "#1B9E77") ))  +theme(legend.position = "none",strip.text.x = element_blank())+xlab("")+ylim(0,1)+ylab(pref2)
+
+
+
+
+ p3<-
+   dat %>% mutate(var=case_when(var=="abund"&stream%in%c("Chiwawa","Total")~"Abundance",
+                                            var=="abund"~"Abundance ",
+                                            TRUE~var),
+  var=fct_relevel(var,c("Abundance","Abundance ","pLAT","pHOS","pNOB","PNI")),
+                           stream=fct_relevel(stream,c("Chiwawa","Nason","White","Total")),
+                           Scenario=case_when((Natal_stream=="baseline"&Downstream=="baseline")~"Baseline",
+                                              (Natal_stream!="baseline"&Downstream=="baseline")~"Natal restored",
+                                              (Natal_stream=="baseline"&Downstream!="baseline")~"Downstream restored",
+                                              (Natal_stream!="baseline"&Downstream!="baseline")~"Both restored"
+                                              ),
+                           Habitat=fct_relevel(Scenario,c("Baseline","Natal restored","Downstream restored","Both restored")),
+  Hatchery=ifelse(Hatchery=="baseline","Baseline","Reduced")) %>%
+  
+  filter(var%in%c("pHOS","pNOB","PNI")) %>%
+     mutate(var=case_when(var=="pHOS"~"Hatchery origin spawners",
+                          var=="pNOB"~"Natural origin broodstock",
+                       var=="PNI"~"Natural Influence"),
+            var=fct_relevel(var,c("Hatchery origin spawners","Natural origin broodstock","Natural Influence"))) %>% 
+ ggplot( aes(x=stream,fill=Habitat,alpha=Hatchery)) +
+  geom_boxplot(
+   aes(ymin = `1`, lower = `2`, middle = `3`, upper = `4`, ymax = `5`),
+   stat = "identity"
+ )+facet_grid(~var,scales = "free_x", space = 'free')+ 
+  
+  scale_fill_brewer(palette="Dark2")+scale_alpha_manual(values=c(1,.5),guide=guide_legend(override.aes = list(fill = "#1B9E77") ))  +
+  theme(legend.position = "top",plot.margin = unit(c(0,.5,0,.5), "lines"))+xlab("")+ylim(ymin,ymax)+ylab(pref3) # Add labels
+   
+  
+ggpubr::ggarrange(ggpubr::ggarrange(p1, p2,ncol=2,widths=c(3,.75),common.legend = TRUE, legend = "top") ,p3 ,nrow=2, common.legend = TRUE, legend = FALSE,heights=c(1.2,1))
+}
+
+# ggsave("scenario_results.jpeg")
+```
+
+
+
+
+
+# Tables
+
+`r tab_nums("scenarios")`
+
+```{r scen_tab }
+knitr::kable(NS_scalars %>% bind_rows(DS_scalars))
+```
+
+# Figures
+
+```{r map, echo=FALSE, out.width = '100%'}
+knitr::include_graphics(here("2_panel_map_elev_9242021.png"))
+```
+
+`r fig_nums("map")`
+
+\newpage
+
+```{r diagram, echo=FALSE, out.width = '100%'}
+knitr::include_graphics(here("No Cov Chapter 3 model concept.jpeg"))
+```
+
+
+`r fig_nums("IPM_diagram")`
+
+
+\newpage
+```{r,fig.width=7,fig.height=6,out.width = '100%'}
+bp_func(out$summarized_sims)
+
+```
+
+`r fig_nums("BP")`
+
+\newpage
+```{r, fig.width=7,fig.height=6,out.width = '100%'}
+bp_func(out$summarized_sims_perc_change,pref1="% change mean\n abundance",pref2=expression(Delta*" Quasi-extinction prob."),pref3=expression(Delta*" proportion"))
+# ggsave("scenario_change_results.jpeg")
+```
+
+`r fig_nums("BP_pC")`
+
+  
