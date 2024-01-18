@@ -47,9 +47,9 @@ Contains raw and processed results\
 
 **ipm_fit_non_centered_4\_13_hatch_scen.Rdata** The TMB integrated population model object. This is used to conducted the population projections using posterior samples of parameters, simulated environmental variables, and random draws of random effects of year.\
 
-**list_of_draws.rda** This file contains posterior samples from the integrated population model. 
+**list_of_draws.rda** This file contains posterior samples from the integrated population model.
 
-**list_of_sims_8\_11_22.Rdata** Raw results of population projection simulations under alternative management strategies. This file is too big for GitHub but is available for download on [Zenodo]([Zenodo](https://zenodo.org/records/10526151)). The 'PVA-preliminary-results-scenarios.Rmd' file has code (line 477) to download the file from Zenodo into the correct place in the file directory. \
+**list_of_sims_8\_11_22.Rdata** Raw results of population projection simulations under alternative management strategies. This file is too big for GitHub but is available for download on [Zenodo](https://zenodo.org/records/10526151). The 'PVA-preliminary-results-scenarios.Rmd' file has code (line 477) to download the file from Zenodo into the correct place in the file directory.\
 
 **summarized_sims_01_17_24.Rdata** Processed and summarized results of population projection simulations.\
 
