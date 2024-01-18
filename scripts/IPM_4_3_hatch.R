@@ -23,6 +23,7 @@ mod<-TMB::MakeADFun(data=dat_IPM,parameters = par_IPM,
                     map=map_IPM,DLL ="IPM_non_centered_hatchery_scenarios",silent = FALSE,
                     inner.control = list(maxit = 1000))
 
+save(mod,file=here("results","ipm_fit_non_centered_4_13_hatch_scen.Rdata"))
 
 
 set.seed(1234)

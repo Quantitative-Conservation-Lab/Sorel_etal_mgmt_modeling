@@ -49,7 +49,7 @@ dyn.load(dynlib("IPM_non_centered_hatchery_scenarios"))
 
 load(here("results","ipm_fit_non_centered_4_13_hatch_scen.Rdata"))
 
-
+sim<-mod$simulate()
 
 ##load posterior samples. 
 load(here("results","list_of_draws.rda"))
