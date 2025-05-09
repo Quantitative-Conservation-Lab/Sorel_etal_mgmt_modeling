@@ -122,7 +122,7 @@ Type termwise_nll(array<Type> &U, vector<Type> theta, per_term_info<Type>& term,
     for(int i = 0; i < term.blockReps; i++){
       // ans += scnldens(U.col(i));
       ans += nldens(U.col(i));
-
+      
       U.col(i)=U.col(i)*sd;
       if (do_simulate) {
         U.col(i) = sd * nldens.simulate();
@@ -131,7 +131,7 @@ Type termwise_nll(array<Type> &U, vector<Type> theta, per_term_info<Type>& term,
     term.corr = nldens.cov(); // For report
     term.sd = sd;             // For report
   }
-
+  
   else error("covStruct not implemented!");
   return ans;
 };
@@ -168,14 +168,14 @@ Type allterms_nll(vector<Type> &u, vector<Type> theta,
 // data structure that holds the parameter index matrices
 template<class Type>
 struct pim: vector<matrix<int> > {
-
+  
   pim(SEXP x){ // Constructor
     (*this).resize(LENGTH(x));
     for(int i=0; i<LENGTH(x); i++){
       SEXP m = VECTOR_ELT(x, i);
       (*this)(i) = asMatrix<int>(m);
     }
-
+    
   }
 };
 
@@ -194,7 +194,7 @@ struct pim: vector<matrix<int> > {
 template<class Type>
 Type objective_function<Type>::operator() ()
 {
-
+  
   // Data
   //~~~~~~~~~~~~~~~~~~~
   ////Spawner recruit model
@@ -205,15 +205,15 @@ Type objective_function<Type>::operator() ()
   DATA_INTEGER( n_s );                 // number of streams
   DATA_INTEGER(n_slt);                  // number of combinations of stream and life history and spawning year modeled
   DATA_INTEGER( n_f );                 // number of latent variable factors
-
+  
   DATA_IVECTOR( mod );                 // process model vector (e.g. Beverton Holt) for each stream x LH
-
+  
   DATA_VECTOR(J_obs);                  // Observed log juveniles (posterior mean from juvenile model)
   DATA_VECTOR(J_obs_sd);               // Observed log juveniles standard error (posterior mean from juvenile modle)
   DATA_MATRIX(log_S_obs);              // Observed spawners (from redd counts)
   DATA_SPARSE_MATRIX(X);               // Design matrix of covariates for process error model
   DATA_SPARSE_MATRIX(X_proj);               // Design matrix of covariates for process error model
-
+  
   DATA_VECTOR(stream_length);           // length (km) of spawning habitat in each natal stream
   //~~~~~~~~~~~~~~~~~~~
   //// MSCJS model
@@ -224,7 +224,7 @@ Type objective_function<Type>::operator() ()
   DATA_INTEGER(n_states);      //number of possible adult return ages
   DATA_INTEGER(n_unique_CH);   //number of unique capture occasions
   DATA_IVECTOR(f);             //release occasion
-
+  
   //CH data
   DATA_IMATRIX(CH);           //capture histories (excluding occasion at marking (which we are conditioning on))
   DATA_IVECTOR(freq);         //frequency of capture histories
@@ -257,13 +257,13 @@ Type objective_function<Type>::operator() ()
   //Covariance structures for projection
   DATA_STRUCT(phi_terms_proj, terms_t);//  Covariance structure for the Phi model
   DATA_STRUCT(psi_terms_proj, terms_t);//  Covariance structure for the Psi model
-
+  
   DATA_FACTOR(beta_phi_pen_ind); //penalty occasion indices
   DATA_FACTOR(beta_p_pen_ind);
   //~~~~~~~~~~~~~~~~~~~
   //// Other
   //~~~~~~~~~~~~~~~~~~~
-
+  
   //for calculating fry survival
   DATA_INTEGER(n_sum_0_1);    // number of rows of design matrix corresponding with summer subyearling time 1 survival
   DATA_INTEGER(ind_sum_0_1);  // index of first row of design matrix corresponding with summer subyearling time 1 survival
@@ -271,13 +271,13 @@ Type objective_function<Type>::operator() ()
   DATA_INTEGER(ind_sum_0_1_proj);  // index of first row of design matrix corresponding with summer subyearling time 1 survival
   DATA_VECTOR(beta_DOY_prior);      // effect of scaled emigration DOY on time one survival for summer subyearling emigrants
   DATA_SCALAR(spr0_DOY);      // difference in mean emigration DOY between spring and summer subyearling emigrants
-
+  
   //
   DATA_VECTOR(WH_carc);      // number of wild and hatchery carcasses recovered
   DATA_VECTOR(H_carc);       // number of wild carcasses recovered
-
+  
   DATA_INTEGER(n_ages);
-
+  
   //~~~~~~~~~~~~~~~~~~~
   ////Population process model
   //~~~~~~~~~~~~~~~~~~~
@@ -286,7 +286,7 @@ Type objective_function<Type>::operator() ()
   DATA_IVECTOR(psi_ind);
   DATA_IMATRIX(phi_ind_hatch);
   DATA_IVECTOR(psi_ind_hatch);
-
+  
   DATA_MATRIX(broodstock);
   DATA_IVECTOR(first_t);           // first year modeled by stream
   DATA_INTEGER(last_t);            // last year modeled
@@ -301,11 +301,13 @@ Type objective_function<Type>::operator() ()
   // prior on redd observation error standard deviation
   DATA_SCALAR(log_S_obs_CV_sd);
   DATA_SCALAR(log_S_obs_CV_mu);
-
-  DATA_VECTOR(DS_restoration_scalar);
-  DATA_VECTOR(NS_restoration_scalar);
+  
+  // DATA_MATRIX(DS_restoration_scalar);
+  // DATA_MATRIX(NS_restoration_scalar);
+  DATA_MATRIX(restoration_scalar);
+  DATA_MATRIX(NOR_tier);
   //---------------------------------------------------------------------------------------------------
-
+  
   //Parameters
   //~~~~~~~~~~~~~~~~~~~
   ////Spawner recruit model
@@ -316,23 +318,23 @@ Type objective_function<Type>::operator() ()
   REPORT(beta_Jmax);
   PARAMETER_VECTOR(beta_gamma);        // log gamma hyper means (LHP-specific)
   REPORT(beta_gamma);
-
+  
   PARAMETER_VECTOR(log_sigma_alpha);   // log standard deviations of stream-specific log alpha random effects (LHP-specific)
   REPORT(log_sigma_alpha);
   PARAMETER_VECTOR(log_sigma_Jmax);    // log standard deviations of stream-specific log Jmax random effects (LHP-specific)
   REPORT(log_sigma_Jmax);
   PARAMETER_VECTOR(log_sigma_gamma);   // log standard deviations of stream-specific log gamma random effects (LHP-specific)
   REPORT(log_sigma_gamma);
-
+  
   PARAMETER_VECTOR(log_sigma_eta);     // log idiosyncratic process errors standard deviations
   vector<Type> sigma_eta = exp(log_sigma_eta);
   REPORT(sigma_eta);
-
+  
   PARAMETER(log_S_obs_CV);
   Type S_obs_CV = exp(log_S_obs_CV);
-
-
-
+  
+  
+  
   //~~~~~~~~~~~~~~~~~~~
   ////MSCJS model
   //~~~~~~~~~~~~~~~~~~~
@@ -356,8 +358,8 @@ Type objective_function<Type>::operator() ()
   PARAMETER_VECTOR(pen_rand_phi);
   PARAMETER_VECTOR(pen_rand_p);
   PARAMETER_VECTOR(pen_rand_psi);
-
-    //~~~~~~~~~~~~~~~~~~~
+  
+  //~~~~~~~~~~~~~~~~~~~
   ////Population process model
   //~~~~~~~~~~~~~~~~~~~
   //paramaters
@@ -370,25 +372,25 @@ Type objective_function<Type>::operator() ()
   PARAMETER(mu_pHOS);
   PARAMETER(log_sd_pHOS);
   PARAMETER_VECTOR(rate);
-
+  
   PARAMETER_VECTOR(log_sigma_Bgamma);
   PARAMETER_VECTOR(log_sigma_BJmax);
-
+  
   PARAMETER_VECTOR(log_sigma_beta_e);
   vector<Type>sigma_beta_e=exp(log_sigma_beta_e);
   PARAMETER(log_sigma_loading);
-
-
+  
+  
   PARAMETER(log_f_5_fec);
   Type f_5_fec=exp(log_f_5_fec);
-
+  
   PARAMETER(logit_RRS);
   Type RRS = invlogit(logit_RRS);
-
-
-
+  
+  
+  
   //---------------------------------------------------------------------------------------------------
-
+  
   // Random effects
   //~~~~~~~~~~~~~~~~~~~
   ////Spawner recruit model
@@ -402,12 +404,12 @@ Type objective_function<Type>::operator() ()
   PARAMETER_MATRIX(Omega_xf);          // latent factor variables
   REPORT(Omega_xf);
   PARAMETER_VECTOR(eta);               // latent stream by year by life history (idiosyncratic) process errors in juvenile recruitment
-
+  
   PARAMETER_VECTOR(beta_e);            // environmental variable coefficients
   PARAMETER_VECTOR(Loadings_vec);      // latent variable factor loadings
-
-
-
+  
+  
+  
   //~~~~~~~~~~~~~~~~~~~
   ////MSCJS model
   //~~~~~~~~~~~~~~~~~~~
@@ -421,31 +423,31 @@ Type objective_function<Type>::operator() ()
   PARAMETER_VECTOR(b_psi);      //psi random effects
   PARAMETER_VECTOR(b_phi_proj);      //phi random effects for projection (not optimized...mapped)
   PARAMETER_VECTOR(b_psi_proj);      //psi random effects for projection (not optimized...mapped)
-
-
+  
+  
   //~~~~~~~~~~~~~~~~~~~
   ////other
   //~~~~~~~~~~~~~~~~~~~
   PARAMETER_VECTOR(eps_p_fem);
-   PARAMETER_VECTOR(log_S_init); // initial spawner abundance
+  PARAMETER_VECTOR(log_S_init); // initial spawner abundance
   vector<Type>S_init=exp(log_S_init);
   //---------------------------------------------------------------------------------------------------
-
+  
   //Variables
-
+  
   //// Initialize joint negative log-likelihood
   parallel_accumulator<Type> jnll(this);
-
-
+  
+  
   vector<Type> theta_psi2(3);
   theta_psi2 << theta_psi,theta_psi_cor;
-
+  
   // Random effects (allterms_nll returns the nll and also simulates new values of the random effects)
   jnll += allterms_nll(b_phi, theta_phi, phi_terms, false,pen_rand_phi);//);//phi
   jnll += allterms_nll(b_p, theta_p, p_terms, false,pen_rand_p);//);//p
   jnll += allterms_nll(b_psi, theta_psi2, psi_terms, false,pen_rand_psi);//);//psi
-
-
+  
+  
   //---------------------------------------------------------------------------------------------------
   //~~~~~~~~~~~~~~~~~~~
   ////Jacobians for TMB_stan
@@ -462,20 +464,20 @@ Type objective_function<Type>::operator() ()
     jnll+=  2.0 * vector<Type>(log(1.0 + vector<Type>(exp(beta_phi_ints)))).sum();
     jnll-=beta_p_ints.sum();
     jnll+=  2.0 * vector<Type>(log(1.0 + vector<Type>(exp(beta_p_ints)))).sum();
-
+    
   }
   DATA_VECTOR(rate_prior);
   jnll -=dnorm(exp(rate),rate_prior(0),rate_prior(1),true).sum()+rate.sum(); //same penalties as for rates in MS mod
-
+  
   jnll-=dnorm(beta_alpha,Type((4)),Type(3),true).sum();//beta_alpha.sum();
-
+  
   //---------------------------------------------------------------------------------------------------
-
-
+  
+  
   //~~~~~~~~~~~~~~~~~~~
   ////Spawner recruit model
   //~~~~~~~~~~~~~~~~~~~
-
+  
   //// Unpack recruitment deviation factor loadings matrix  (taken from J. Thorson spatial class example)
   matrix<Type> Loadings_pf(n_sl, n_f);
   int Count = 0;
@@ -495,17 +497,17 @@ Type objective_function<Type>::operator() ()
     }
   }
   REPORT(Loadings_pf);
-
-
-
-
-
+  
+  
+  
+  
+  
   //Hierarchichal spawner-recruit model parameters
   ////alphas, gammas, and Jmaxes
   vector<Type> log_alpha(n_sl); // empty vector to hold log alphas
   vector<Type> log_Jmax(n_sl);  // empty vector to hold log Jmaxes
   vector<Type> log_gamma(n_sl); // empty vector to hold log gammas
-
+  
   Type alpha_bias_correction = 0;
   Type gamma_bias_correction = 0;
   Type Jmax_bias_correction = 0;
@@ -514,28 +516,28 @@ Type objective_function<Type>::operator() ()
     alpha_bias_correction = pow(exp(log_sigma_alpha(j)),2)/2.0;
     Jmax_bias_correction = pow(exp(log_sigma_Jmax(j)),2)/2.0;
     gamma_bias_correction = pow(exp(log_sigma_gamma(j)),2)/2.0;
-
+    
     for( int i=0; i<n_s; i++){       // loop over streams
-
+      
       log_alpha(i*n_l+j) =           // log alpha
         beta_alpha(j) +              // life-history intercept
         eps_alpha(i*n_l+j)*exp(log_sigma_alpha(j))-
         alpha_bias_correction;  // stream*LH
-
-
+      
+      
       log_Jmax(i*n_l+j) =            // log maximum recruitment
         beta_Jmax(j)* exp(log_sigma_BJmax(j))+log_Jmax_prior_mean +               // life-history intercept
         eps_Jmax(i*n_l+j)*exp(log_sigma_Jmax(j))-
         Jmax_bias_correction;            //
-
+      
       log_gamma(i*n_l+j) =            // log gamma
         beta_gamma(j)* exp(log_sigma_Bgamma(j)) +               // life-history intercept
         eps_gamma(i*n_l+j)*exp(log_sigma_gamma(j))-
         gamma_bias_correction;
-
+      
     }
   }
-
+  
   ////// transform to positive real space
   vector<Type> alpha = exp(log_alpha);
   REPORT(alpha);
@@ -543,35 +545,35 @@ Type objective_function<Type>::operator() ()
   REPORT(Jmax);
   vector<Type> gamma =  exp(log_gamma);
   REPORT(gamma);
-
+  
   //// covariate effects on process errors
   vector<Type> cov_e(n_slt+n_slt_proj);
-
+  
   cov_e.head(n_slt) = X * vector<Type>(beta_e*sigma_beta_e); // design matrix * coefficients
-
+  
   SIMULATE {
     cov_e.tail(n_slt_proj) = X_proj * vector<Type>(beta_e*sigma_beta_e); // design matrix * coefficients
   }
   REPORT(cov_e);
-
+  
   // latent variable factor effects on process errors
   matrix<Type> LV_effects(12,(Omega_xf.rows()+proj_years));
-
-
+  
+  
   LV_effects.block(0,0,12,Omega_xf.rows()) = matrix<Type>(Loadings_pf * Omega_xf.transpose());
-
-
-
+  
+  
+  
   SIMULATE {
     matrix<Type> Omega_xf_proj(proj_years,1);
     for(int i=0; i<proj_years; i++) {Omega_xf_proj(i,0)=rnorm(0.0,1.0);}
     LV_effects.block(0,Omega_xf.rows(),12,proj_years) = Loadings_pf * Omega_xf_proj.transpose();
   }
   REPORT(LV_effects);
-
+  
   vector<Type> eta_long(n_slt+n_slt_proj);
   eta_long.head(n_slt)=eta;
-
+  
   SIMULATE {
     for(int i=n_slt; i<(n_slt_proj+n_slt); i++) {eta_long(i)=rnorm(0.0,1.0);}
   }
@@ -581,18 +583,18 @@ Type objective_function<Type>::operator() ()
   //concatenate intercepts and penalized coefficient
   vector<Type> beta_phi(beta_phi_ints.size()+beta_phi_pen.size());
   vector<Type> beta_phi_pen2= beta_phi_pen* exp(log_pen_sds_phi);
-
-
+  
+  
   beta_phi << beta_phi_ints,beta_phi_pen2;
-
+  
   vector<Type> beta_p(X_p.cols());
   vector<Type> beta_p_pen2= beta_p_pen* exp(log_pen_sds_p);
-
+  
   beta_p << beta_p_ints,beta_p_pen2;
   vector<Type> beta_psi_pen2= beta_psi_pen* exp(log_pen_sds_psi);
-
+  
   vector<Type> beta_psi(X_psi.cols());
-
+  
   beta_psi << beta_psi_ints,beta_psi_pen2;
   ADREPORT(beta_phi);
   ADREPORT(beta_p);
@@ -600,7 +602,7 @@ Type objective_function<Type>::operator() ()
   REPORT(beta_phi);
   REPORT(beta_p);
   REPORT(beta_psi);
-
+  
   // Linear predictors
   vector<Type> eta_phi(X_phi.rows()+X_phi_proj.rows()+n_sum_0_1+n_sum_0_1_proj);
   vector<Type> eta_psi(X_psi.rows());
@@ -610,8 +612,8 @@ Type objective_function<Type>::operator() ()
     vector<Type>(beta_phi.head(X_phi.cols()));
   vector<Type> eta_p = X_p*beta_p;
   eta_psi = X_psi*beta_psi;
-
-
+  
+  
   SIMULATE {
     ////projection
     eta_phi.segment((X_phi.rows()+n_sum_0_1),X_phi_proj.rows()) = vector<Type>(X_phi_proj*
@@ -623,8 +625,8 @@ Type objective_function<Type>::operator() ()
   eta_phi.head(X_phi.rows()) += Z_phi*b_phi;
   eta_p += Z_p*b_p;
   eta_psi += Z_psi*b_psi;
-
-
+  
+  
   SIMULATE {
     //////projection
     Type nothing=0;
@@ -634,25 +636,25 @@ Type objective_function<Type>::operator() ()
     eta_phi.segment((X_phi.rows()+n_sum_0_1),X_phi_proj.rows()) += Z_phi_proj*b_phi_proj;
     eta_psi_proj += Z_psi_proj*b_psi_proj;
   }
-
+  
   REPORT(b_phi_proj);
   REPORT(b_psi_proj);
-
-
+  
+  
   // calculate spring subyearling emigrant time 1 survival
   eta_phi.segment(X_phi.rows(),n_sum_0_1)=
     vector<Type>(vector<Type>(eta_phi.segment(ind_sum_0_1,n_sum_0_1))+
     Type(beta_DOY*spr0_DOY));
-
-
+  
+  
   SIMULATE {
     eta_phi.tail(n_sum_0_1_proj)=
       vector<Type>(vector<Type>(eta_phi.segment(ind_sum_0_1_proj,n_sum_0_1_proj))+
       Type(beta_DOY*spr0_DOY));
   }
-
-
-
+  
+  
+  
   // Apply link
   vector<Type> phi=invlogit(eta_phi);
   vector<Type> p(eta_p.size()+1);
@@ -669,8 +671,8 @@ Type objective_function<Type>::operator() ()
   psi.block(0,0,n_groups,1)= eta_psi.segment(0,n_groups)/denom;        //return after 1 year
   psi.block(0,1,n_groups,1)= Type(1)/denom;                            //return after 2 year
   psi.block(0,2,n_groups,1)= eta_psi.segment(n_groups,n_groups)/denom; //return after 3 year
-
-
+  
+  
   SIMULATE {
     eta_psi_proj= exp(eta_psi_proj);
     vector<Type> denom_proj = eta_psi_proj.segment(0,n_groups_proj)+
@@ -679,9 +681,9 @@ Type objective_function<Type>::operator() ()
     psi.block(n_groups,1,n_groups_proj,1)= Type(1)/denom_proj;                            //return after 2 year
     psi.block(n_groups,2,n_groups_proj,1)= eta_psi_proj.segment(n_groups_proj,n_groups_proj)/denom_proj; //return after 3 year
   }
-
+  
   REPORT(psi);
-
+  
   //calculate the average age proportion
   vector<Type> temp = exp(beta_psi_ints);
   Type temp2 =  temp.sum()+1;
@@ -691,20 +693,20 @@ Type objective_function<Type>::operator() ()
   //~~~~~~~~~~~~~~~~~~~
   ////Population process model
   //~~~~~~~~~~~~~~~~~~~
-
+  
   // ~~ Variables ~~
   matrix<Type> S_hat(last_t+proj_years,n_s);           //female spawners (wild + hatchery) stream x year
   matrix<Type> S_eff(last_t+proj_years,n_s);           //female spawners (wild + hatchery) stream x year
   // vector<Type> S_init = exp(log_S_init );           //female spawners (wild + hatchery) stream x year(1-5)
   matrix<Type> S_A_hat(last_t+proj_years, n_ages*n_s ); //Wild spawners (male + female) at Tumwater Dam stream x year x age
   S_A_hat.setZero();                  //start at 0 because we will be adding to it from different LHs
-
+  
   Type HOS=0; /// matrix of hatchery origin adult female spawners (basin wide) from each program
   // the number released at Tumwater would be this number divided by PSS and p_female. The number that spawn in
   //each tributary is this number times the proportion that spawn in each trib (stray/home rates).
-
+  
   matrix<Type> broodstock_proj(proj_years,n_s-1);
-
+  
   DATA_VECTOR(Hmax);       // maximum number of hatchery origin spawners on spawning ground
   DATA_VECTOR(Hslope);     // rate at which HO spawners decreases with increasing NO spawners
   DATA_MATRIX(stray_home); // proprtions of fish from each hatchery program going to each trib
@@ -714,66 +716,66 @@ Type objective_function<Type>::operator() ()
   vector<Type> forecast(3);
   DATA_VECTOR(bs_prop); //proportion of NO return taken for broodstock
   DATA_VECTOR(BS_Max);  //total number of fish needed for broodstock in each stream
-
+  
   array<Type> A_tum_y(last_t+proj_years,n_s,n_l,n_ages); //returns by year, strea, LH, and age
-
+  
   // PSS
   Type PSS =invlogit(mu_pss);
   //penalty on mu_pss
   DATA_SCALAR(mu_pss_prior_mean);
   DATA_SCALAR(mu_pss_prior_sd);
   jnll -= dnorm (mu_pss,mu_pss_prior_mean,mu_pss_prior_sd,true);
-
-
-
+  
+  
+  
   // p Female random effects
   vector<Type> eps_p_fem2(eps_p_fem.size()+proj_years*n_s);
   eps_p_fem2.head(eps_p_fem.size())=eps_p_fem;
   SIMULATE{
     for(int i=eps_p_fem.size(); i<((proj_years*n_s)+eps_p_fem.size()); i++) {eps_p_fem2(i)=rnorm(0.0,1.0);}
   }
-
+  
   vector<Type> logit_p_female = mu_fem+(eps_p_fem2*p_fem_sd);
   vector<Type> p_female =invlogit(logit_p_female); // prespawn survival (Tumwater to spawn)
   REPORT(p_female);
   jnll -= dnorm (vector<Type>(logit_p_female.head(eps_p_fem.size())),logit_p_fem_obs,p_fem_obs_CV,true).sum();
   // random effect probabilities
   jnll -= dnorm(eps_p_fem,Type(0),Type(1),true).sum();
-
+  
   //// pHOS
   jnll -= dnorm(logit_pHOS,Type(0),Type(1),true).sum();
-
+  
   vector<Type> pHOS(logit_pHOS.size()+proj_years*n_s);
   pHOS.head(logit_pHOS.size())=invlogit(vector<Type>(logit_pHOS*Type(exp(log_sd_pHOS))+mu_pHOS));
-
-
+  
+  
   // prior on redd observation error standard deviation
   jnll -= dnorm(log_S_obs_CV,log_S_obs_CV_mu,log_S_obs_CV_sd,true);
-
-
-
+  
+  
+  
   vector<Type> J_hat(n_slt+n_slt_proj);
   vector<Type> J_pred(n_slt+n_slt_proj);         // juvenile emigrant abundance. stream x LH x brood year
-
+  
   vector<Type> JBon(n_slt+n_slt_proj);           // fish returning as adults to Bonneville dam across years. stream x LH x brood year
   vector<Type> J_LW(n_slt+n_slt_proj);           // fish returning as adults to Bonneville dam across years. stream x LH x brood year
   matrix<Type> A_tum(n_slt+n_slt_proj, n_ages);  // fish returning as adult to Tumwater stream X LH x brood year, age.
-
-
-
+  
+  
+  
   //hatchery production things
-                 DATA_VECTOR(hatch_mod);
-                 Type  hatch_juv = 0;
-                 Type  hatch_return=0;
-                 Type hatch_bs = 0;
-                 Type hatch_bs_target = 0;
-                 matrix<Type> total_broodstock(last_t+proj_years,2);
-                 DATA_MATRIX(BS_SIZE);
-                 total_broodstock.block(last_t-5,0,5,2) = BS_SIZE;
-                 vector<Type> hatch_adult(3);
-                 matrix<Type> hatch_ret_a(last_t+proj_years,6);
-                 hatch_ret_a.setZero();
-
+  DATA_VECTOR(hatch_mod);
+  Type  hatch_juv = 0;
+  vector<Type>  hatch_return(2);
+  Type hatch_bs = 0;
+  Type hatch_bs_target = 0;
+  matrix<Type> total_broodstock(last_t+proj_years,2);
+  DATA_MATRIX(BS_SIZE);
+  total_broodstock.block(last_t-5,0,5,2) = BS_SIZE;
+  vector<Type> hatch_adult(3);
+  matrix<Type> hatch_ret_a(last_t+proj_years,6);
+  hatch_ret_a.setZero();
+  
   Type S_hat_stan = 0;               // spawners per kilometer
   int st =0;                         // counter for index of BY and streams
   int st2 =0;                         // counter for index of BY and streams
@@ -781,22 +783,27 @@ Type objective_function<Type>::operator() ()
   int init_ind =0;                    // counter for index of BY and streams
   int sl = 0;                        // counter for index of stream, LH
   int slt = 0;                       // counter for index of stream, LH, BY
-
+  
   int st_H =0;                       // counter index for stream by year for hatcheries
-
+  
   Type prop_nas = 0;
   Type prop_5 = 0;
-
+  
   // if(proj_years>0){
   Type new_bs_prop=0;
   Type for_chiw_nas = 0;
   vector<Type> bs_collect_y(2);       //annual number collected from each populations
+  
+  Type NOR =0;
+  Type pNOB =0;
+  Type PNI_floor =0;
+  Type pHOS_max =0;
   // Type all_Tum = 0;
   // }
   // ~~~ Begin population process model ~~~~~
-
+  
   for(int t = 0; t<(last_t+proj_years); t++){   //brood year loop
-
+    
     //Tumwater to spawning females
     for(int s =0; s<n_s; s++){    //stream loop
       if (t < first_t(s)) continue; //don't do adult stuff if previous to first year modeled for that stream
@@ -805,31 +812,31 @@ Type objective_function<Type>::operator() ()
         tum_W_ad(t,s) = S_init(init_ind); //wild returns to tumwater dam in first 5 years
         init_ind++;
       }
-
-
+      
+      
       if(((t>=(first_t(s)+5))&(t<last_t))){ // HISTORICAL
         tum_W_ad(t,s)= Type(S_A_hat(t,s*n_ages)+S_A_hat(t,s*n_ages+1)+S_A_hat(t,s*n_ages+2)); //add three four and five year olds
-
+        
         for(int a =0; a<n_ages; a++){  //adult ages loop
-
+          
           if((s==0)|((s==1)&(t<20))){ //nason before 2015 (i.e. t ==20) used broodstock exclusively form Nason
-
+            
             tum_W_ad(t,s) -= Type(broodstock(st,a));
-
+            
           }else{
             if(s==1){ // nason in 2015 on takes broodstock in proportion to abundance in nason and Chiwawa
               prop_nas=tum_W_ad(t,s)/(tum_W_ad(t,0)+tum_W_ad(t,1));
-
+              
               tum_W_ad(t,1) -= Type(broodstock(st,a)*prop_nas);//take away from nason
               tum_W_ad(t,0) -= Type(broodstock(st,a)*(1-prop_nas));// take away from Chiwawa
-
+              
             }
           }
         }
       }
       st++;
     }
-
+    
     if(t>=last_t){       //// PROJECTION
       for(int s =0; s<n_s; s++){ // stream loop for projection broodstock and hatchery releases
         tum_W_ad(t,s)= Type(S_A_hat(t,s*n_ages)+S_A_hat(t,s*n_ages+1)+S_A_hat(t,s*n_ages+2));
@@ -845,17 +852,17 @@ Type objective_function<Type>::operator() ()
           bs_collect_y.setZero();                               //save number collected from CHiwawa, to add collected for nason below
           bs_collect_y(s) = broodstock_proj((t-last_t),s);
           //hatchery broodstock
-          hatch_return= (hatch_ret_a(t,s*n_ages+1)+hatch_ret_a(t,s*n_ages+2));//Type(hatch_ret_a(t,s*n_ages)+; //calculate hatchery returns
-
+          hatch_return(s)= (hatch_ret_a(t,s*n_ages+1)+hatch_ret_a(t,s*n_ages+2));//Type(hatch_ret_a(t,s*n_ages)+; //calculate hatchery returns
+          
           hatch_bs_target= BS_Max(s)- broodstock_proj((t-last_t),s);  //number of hatchery adults needed for broodstock
-          if(hatch_return>=hatch_bs_target){
+          if(hatch_return(s)>=hatch_bs_target){
             hatch_bs= hatch_bs_target;               //number of hatchery adults used in broddstock
-            hatch_return-=hatch_bs_target;           // subtract from hatchery return
+            hatch_return(s)-=hatch_bs_target;           // subtract from hatchery return
           }else{
-            hatch_bs=hatch_return;                   //number of hatchery adults used in broddstock
-            hatch_return=0.0;                        // subtract from hatchery return
+            hatch_bs=hatch_return(s);                   //number of hatchery adults used in broddstock
+            hatch_return(s)=0.0;                        // subtract from hatchery return
           }
-
+          
           total_broodstock(t,s)=hatch_bs+ broodstock_proj((t-last_t),s);  //total broodstock
         }else{
           //Nason
@@ -863,7 +870,7 @@ Type objective_function<Type>::operator() ()
             forecast(s) = tum_W_ad(t,s)*exp(rnorm(0.0,0.10));
             new_bs_prop =  (broodstock_proj((t-last_t),0)/forecast(0));
             new_bs_prop = bs_prop(s)-new_bs_prop;
-
+            
             for_chiw_nas = (forecast(s)+forecast(0));
             broodstock_proj((t-last_t),s)=new_bs_prop * for_chiw_nas;
             if(broodstock_proj((t-last_t),s)>BS_Max(s)){
@@ -874,62 +881,117 @@ Type objective_function<Type>::operator() ()
             bs_collect_y(1) += Type( broodstock_proj((t-last_t),s)*prop_nas);
             tum_W_ad(t,0) -= Type( broodstock_proj((t-last_t),s)*(1-prop_nas));// take away from Chiwawa
             bs_collect_y(0) += Type( broodstock_proj((t-last_t),s)*(1-prop_nas));
-
-
+            
+            
             ////hatchery broodstock
-            hatch_return= (hatch_ret_a(t,s*n_ages+1)+hatch_ret_a(t,s*n_ages+2));//Type(hatch_ret_a(t,s*n_ages)+
-
+            hatch_return(s)= (hatch_ret_a(t,s*n_ages+1)+hatch_ret_a(t,s*n_ages+2));//Type(hatch_ret_a(t,s*n_ages)+
+            
             hatch_bs_target = BS_Max(s) - broodstock_proj((t-last_t),s);
-            if(hatch_return>=hatch_bs_target){
+            if(hatch_return(s)>=hatch_bs_target){
               hatch_bs= hatch_bs_target;
-              hatch_return-=hatch_bs_target;
+              hatch_return(s)-=hatch_bs_target;
             }else{
-              hatch_bs=hatch_return;
-              hatch_return=0.0;
+              hatch_bs=hatch_return(s);
+              hatch_return(s)=0.0;
             }
-
-            total_broodstock(t,s)=hatch_bs+ broodstock_proj((t-last_t),s);
+            
+            total_broodstock(t,s)=hatch_bs + broodstock_proj((t-last_t),s);
           }
         }
-
+        
       }//end of stream loop
-
+      
       for(int s =0; s<n_s; s++){ // stream loop for projection hatchery releases
         /////calculate hatchery origin spawners (from Chiwawa and nason programs)
+        
+        
         if(s<2){
-          HOS = Hmax(s)-(forecast(s)-bs_collect_y(s))*Hslope(s);
-          if(HOS<0.0){ //no HOS if spawners is > Hmax
-            HOS=0.0;
+          
+          // HOS = Hmax(s)-(forecast(s)-bs_collect_y(s))*Hslope(s);
+          // if(HOS<0.0){
+          //   HOS=0.0;
+          // }else{
+          //   if(HOS> hatch_return(s)){ //max HOS is hatch return after broodstock removal
+          //     HOS=hatch_return(s);
+          //   }
+          // }
+          
+          NOR=(forecast(s)-broodstock_proj((t-last_t),s));
+          
+           if((total_broodstock(t,s))>0){
+            pNOB=broodstock_proj((t-last_t),s)/total_broodstock(t,s);
           }else{
-            if(HOS> hatch_return){ //max HOS is hatch return after broodstock removal
-              HOS=hatch_return;
+            pNOB=1;
+          }
+          
+          if(NOR> NOR_tier(s,0)){
+            PNI_floor=.8;
+            pHOS_max = (pNOB*(1-PNI_floor))/PNI_floor;
+            
+          }else{
+            if(NOR> NOR_tier(s,1)){
+              PNI_floor=.67;
+              pHOS_max = (pNOB*(1-PNI_floor))/PNI_floor;
+              
+            }else{
+              if(NOR> NOR_tier(s,2)){
+                PNI_floor=.5;
+                pHOS_max = (pNOB*(1-PNI_floor))/PNI_floor;
+                
+              }else{
+                if(NOR> NOR_tier(s,3)){
+                  PNI_floor=.4;
+                  pHOS_max = (pNOB*(1-PNI_floor))/PNI_floor;
+                }else{
+                  pHOS_max=.99;
+                }
+              }
             }
           }
-
-
+          
+          if(pHOS_max>.99){
+            pHOS_max=.99;
+          }
+          if(pHOS_max<.01){
+            pHOS_max=.01;
+          }
+          
+          
+          HOS = (pHOS_max*NOR)/ (1-pHOS_max) ;
+          
+          
+          
+          // if(HOS<0.0){
+          //   HOS=0.0;
+          // }else{
+            if(HOS> hatch_return(s)){ //max HOS is hatch return after broodstock removal
+              HOS=hatch_return(s);
+            }
+          // }
+          
           for(int s_to = 0; s_to < n_s; s_to++){
             tum_H_ad(t,s_to)+= HOS*stray_home(s,s_to);
           }
         }
-
+        
       }//end of stream loop
     }// end of projection if statement
-
-
+    
+    
     for(int s =0; s<n_s; s++){ // stream loop adding hatchery and wild and multiplying times PSM and p female
       if (t < (first_t(s))) continue;
-
+      
       if(t<last_t){ // historical but after initial 5 years in each stream
-
+        
         tum_H_ad(t,s) =  (tum_W_ad(t,s)*pHOS(st2))/Type(1-pHOS(st2));
         S_hat(t,s) =  tum_W_ad(t,s)+tum_H_ad(t,s);      // natural plus hatchery origin spawners
         S_hat(t,s) *= (PSS*p_female(st2));
         // prespawn mortality and percent female
-
+        
         ////  Latent spawners likelihood
         jnll -= dnorm(Type(log_S_obs(t,s)) ,
                       Type(log(S_hat(t,s)))  ,S_obs_CV , true );
-
+        
         if(t<(first_t(s)+5)){
           prop_5 = prop_5_init;
         }else{
@@ -938,42 +1000,42 @@ Type objective_function<Type>::operator() ()
         S_eff(t,s) = (tum_W_ad(t,s)*(1.0+(prop_5*f_5_fec)));
         S_eff(t,s) += tum_H_ad(t,s)*RRS;
         S_eff(t,s) *= (PSS*p_female(st2));
-
-
-
-
+        
+        
+        
+        
       }else{// PROJECTION
-
-
+        
+        
         //sum across ages and multiply by prespawn mortality rate and percent females and proportion hatchery
         S_hat(t,s) = tum_W_ad(t,s)+ tum_H_ad(t,s);          // plus hatchery origin spawners
-        pHOS(st2) = tum_H_ad(t,s)/S_hat(t,s);
+        pHOS(st2) = tum_H_ad(t,s)/(S_hat(t,s)+.0001);
         S_hat(t,s) *= (PSS*p_female(st2));                  // prespawn mortality and percent female
-
+        
         prop_5 = (S_A_hat(t,s*n_s+2)/Type(S_A_hat(t,s*n_s+1)+S_A_hat(t,s*n_s+2)));
         S_eff(t,s) = (tum_W_ad(t,s)*(1.0+(prop_5*f_5_fec)));
         S_eff(t,s) += tum_H_ad(t,s)*RRS;
         S_eff(t,s) *= (PSS*p_female(st2));
-
-
+        
+        
       }
       st2++;
-
+      
     }// end of stream loop
-
-
-
-
+    
+    
+    
+    
     //***************************************************************************************************
     //spawning females to juvenile transition
-
+    
     for(int s =0; s<n_s; s++){ //stream loop
       //don't calculate juveniles if previous to first year modeled for that stream
       // model brood year productions through 2016
       if ((t < first_t(s))|(t>=((last_t+proj_years)-3))) continue;
       S_hat_stan= S_eff(t,s)/stream_length(s);
       for(int l =0; l<n_l; l++){    //juvenile life history strategies
-
+        
         sl=  s*n_l+l;
         ////calculate number of juvenile emigrants from natal stream
         ///// calculate expected juveniles based on spawners and functional form (without process error)
@@ -981,42 +1043,43 @@ Type objective_function<Type>::operator() ()
         J_hat(slt)=  (alpha(sl)* pow(S_hat_stan,gamma(sl))) /
           (Type(1.0)+   alpha(sl)* pow(S_hat_stan,gamma(sl)) /
             Jmax(sl));
-
+        
         // //// multiplicitive process error
-
+        
         J_pred(slt) =cov_e(slt)+                 // environmental covariate effects
           LV_effects(sl, t)+
           Type(eta_long(slt)*sigma_eta(sl));
-
+        
         J_pred(slt) = exp(J_pred(slt));
         J_pred(slt) *=J_hat(slt);
         J_pred(slt)*=stream_length(s);
-
+        
         SIMULATE{
           if(t>=last_t){
-            J_pred(slt) *= NS_restoration_scalar(l);
+            // J_pred(slt) *= NS_restoration_scalar(l,s);
+            J_pred(slt) *= restoration_scalar(l,s);
           }
-
+          
         }
         //***************************************************************************************************
         //juvenile survival
-
+        
         if (t<((last_t+proj_years)-3)){//survival through BY 2015
-
-
-            ///downstream
+          
+          
+          ///downstream
           J_LW(slt) =  J_pred(slt)*Type(phi(phi_ind(slt,0)));
-
+          
           SIMULATE{
             if(t>=last_t){
-            J_LW(slt) *= DS_restoration_scalar(l); //increase downstream survival by a factor
-            if(J_LW(slt)> J_pred(slt)){         // if fish were created (i.e. increase in survival was to value greater than 1, that fix survival at 1)
-              J_LW(slt)= J_pred(slt);
+              // J_LW(slt) *= DS_restoration_scalar(l,s); //increase downstream survival by a factor
+              if(J_LW(slt)> J_pred(slt)){         // if fish were created (i.e. increase in survival was to value greater than 1, that fix survival at 1)
+                J_LW(slt)= J_pred(slt);
+              }
             }
           }
-          }
           JBon(slt) = J_LW(slt);
-
+          
           for(int o=1; o<(nDS_OCC); o++){ //downstream occasions
             ////spawner density effect on survival
             // if(!(((l==1)&(o>0))|(o==2))){//don't add spawner effect twice for fry/summer sub years shared survival terms, not including spawner effect in time 3 either
@@ -1024,85 +1087,85 @@ Type objective_function<Type>::operator() ()
             // }
             JBon(slt) *= Type(phi(phi_ind(slt,o)));
           }
-
+          
           ////Smolt to adult
           ////return age proportion
           A_tum.row(slt) = vector<Type>(vector<Type>(psi.row(psi_ind(slt))) * JBon(slt)*
             Type(phi(phi_ind(slt,nDS_OCC))));
-
+          
           ////upstream survival
           for(int a =0; a<n_ages; a++){  //adult ages a=0 is age 3
             for(int o=0; o<nUS_OCC; o++){ //upstream occasions
               A_tum(slt,a) *= Type(phi(phi_ind(slt,nDS_OCC+1+a*nUS_OCC+o)));
             }// end loop over upstream occasions
-
+            
             if((((t+a+3)<(last_t+proj_years)))){ // don't bother with fish returning >3 years after the last modeled brood year.
               SIMULATE{
-              A_tum_y(t+3+a,s,l,a)= Type(A_tum(slt,a));
+                A_tum_y(t+3+a,s,l,a)= Type(A_tum(slt,a));
               }
               S_A_hat(t+3+a,s*n_s+a)+= Type(A_tum(slt,a)); //add natural origin returns across life histories and translate to index by return years
-
+              
             }
           } //end loop over adult ages
         }//if statement for survival of juvenile to adulthood
         slt++;
       }  // end of loop over life histories
     } //end of loop over streams
-
-
+    
+    
     //***************************************************************************************************
     //*//***************************************************************************************************
     //*//***************************************************************************************************
     //hatchery production
-
+    
     ////only do hatchery survival for last 5 years of retrospective and all prospective except last 3 years
-      if ((t < (last_t-6))|(t>=((last_t+proj_years)-3))) continue;
+    if ((t < (last_t-6))|(t>=((last_t+proj_years)-3))) continue;
     for(int s =0; s<(n_s-1); s++){ //stream loop
-
-
-
-            hatch_juv= rnorm(hatch_mod(0) , hatch_mod(1)); //log smolts produced per hatchery broodstock fish
-            hatch_juv=exp(hatch_juv);                       // smolts produced per hatchery broodstock fish
-            hatch_juv *= total_broodstock(t,s);            // total hatchery smolts produced
-
-        //***************************************************************************************************
-        //juvenile survival hatchery
-
-
-
-
-          for(int o=0; o<(nDS_OCC); o++){ //downstream occasions
-            ////spawner density effect on survival
-            hatch_juv *= Type(phi(phi_ind_hatch(st_H,o)));
-          }
-
-          ////Smolt to adult
-          ////return age proportion
-          hatch_adult = vector<Type>(vector<Type>(psi.row(psi_ind_hatch(st_H))) * hatch_juv*
-            Type(phi(phi_ind_hatch(st_H,nDS_OCC))));
-
-
-          ////upstream survival
-          for(int a =0; a<n_ages; a++){  //adult ages a=0 is age 3
-            for(int o=0; o<nUS_OCC; o++){ //upstream occasions
-              hatch_adult(a) *= Type(phi(phi_ind_hatch(st_H,nDS_OCC+1+(a*nUS_OCC)+o)));
-            }// end loop over upstream occasions
-
-            if((((t+a+3)<(last_t+proj_years)))){ // don't bother with fish returning >3 years after the last modeled brood year.
-              hatch_ret_a((t+3+a),((s*n_ages)+a)) = Type(hatch_adult(a)); //add natural origin returns across life histories and translate to index by return years
-            }//
-          }//end loop over adult ages
-    st_H++;
+      
+      
+      
+      hatch_juv= rnorm(hatch_mod(0) , hatch_mod(1)); //log smolts produced per hatchery broodstock fish
+      hatch_juv=exp(hatch_juv);                       // smolts produced per hatchery broodstock fish
+      hatch_juv *= total_broodstock(t,s);            // total hatchery smolts produced
+      
+      //***************************************************************************************************
+      //juvenile survival hatchery
+      
+      
+      
+      
+      for(int o=0; o<(nDS_OCC); o++){ //downstream occasions
+        ////spawner density effect on survival
+        hatch_juv *= Type(phi(phi_ind_hatch(st_H,o)));
+      }
+      
+      ////Smolt to adult
+      ////return age proportion
+      hatch_adult = vector<Type>(vector<Type>(psi.row(psi_ind_hatch(st_H))) * hatch_juv*
+        Type(phi(phi_ind_hatch(st_H,nDS_OCC))));
+      
+      
+      ////upstream survival
+      for(int a =0; a<n_ages; a++){  //adult ages a=0 is age 3
+        for(int o=0; o<nUS_OCC; o++){ //upstream occasions
+          hatch_adult(a) *= Type(phi(phi_ind_hatch(st_H,nDS_OCC+1+(a*nUS_OCC)+o)));
+        }// end loop over upstream occasions
+        
+        if((((t+a+3)<(last_t+proj_years)))){ // don't bother with fish returning >3 years after the last modeled brood year.
+          hatch_ret_a((t+3+a),((s*n_ages)+a)) = Type(hatch_adult(a)); // hatchery origin returns and translate to index by return years
+        }//
+      }//end loop over adult ages
+      st_H++;
     } //end of loop over streams
-
-
-
-
+    
+    
+    
+    
   } // end of loop over brood years
-
+  
   //~~~~~~~ end of population process model ~~~~~~~~~~~~~~~~
-
-
+  
+  
   // REPORT(st);
   // REPORT(slt);
   // REPORT(count_Sinit);
@@ -1133,61 +1196,61 @@ Type objective_function<Type>::operator() ()
   //---------------------------------------------------------------------------------------------------
   //---------------------------------------------------------------------------------------------------
   //---------------------------------------------------------------------------------------------------
-
-
+  
+  
   // Probabilities of random effects
-
-
+  
+  
   //~~~~~~~~~~~~~~~~~~~
   ////Spawner recruit model
   //~~~~~~~~~~~~~~~~~~~
   //// stream-specific random effects on log alphas, log gammas, and log Jmaxes
-   jnll -= dnorm(eps_alpha,Type(0),Type(1),true).sum();
+  jnll -= dnorm(eps_alpha,Type(0),Type(1),true).sum();
   jnll -= dnorm(eps_gamma,Type(0),Type(1),true).sum();
-   jnll -= dnorm(eps_Jmax,Type(0),Type(1),true).sum();
-
-
+  jnll -= dnorm(eps_Jmax,Type(0),Type(1),true).sum();
+  
+  
   jnll -= (dexp(exp(log_sigma_alpha),Type(exp(rate(0))),true).sum() +
     log_sigma_alpha.sum());
-
+  
   jnll -= (dexp(exp(log_sigma_gamma),Type(exp(rate(0))),true).sum() +
     log_sigma_gamma.sum());
-
-   jnll  -= (dexp(exp(log_sigma_Jmax),Type(exp(rate(0))),true).sum() +
+  
+  jnll  -= (dexp(exp(log_sigma_Jmax),Type(exp(rate(0))),true).sum() +
     log_sigma_Jmax.sum());
-
-
+  
+  
   jnll  -= dnorm(beta_gamma,Type(0),Type(1),true).sum();
   jnll  -= (dexp(exp(log_sigma_Bgamma),Type(exp(rate(1))),true).sum() +
     log_sigma_Bgamma.sum());
-
-
+  
+  
   jnll  -= dnorm(beta_Jmax,Type(0),Type(1),true).sum();
   jnll  -= (dexp(exp(log_sigma_BJmax),Type(exp(rate(2))),true).sum() +
     log_sigma_BJmax.sum());
-
+  
   jnll  -= (dexp(exp(log_sigma_eta),Type(exp(rate(3))),true).sum() +
     log_sigma_eta.sum());
-
-
-
+  
+  
+  
   //// latent factor variables
   for(int t = 0; t<(n_t); t++){ // loop over years
     jnll-= dnorm(vector<Type>(Omega_xf.row(t)),Type(0),Type(1),true).sum();
   }
-
+  
   // idiosyncratic process error
   jnll-=dnorm(eta ,
               Type(0.0) ,
               //            sigma_eta,
               Type(1.0),
               true ).sum();
-
-
-
-
-
-
+  
+  
+  
+  
+  
+  
   if(n_f>0){
     jnll -= dnorm(Type(exp(Loadings_vec(0))),Type(0.0),Type(1),true)+Loadings_vec(0);
     for(int i = 1; i< Loadings_vec.size(); i++){
@@ -1195,18 +1258,18 @@ Type objective_function<Type>::operator() ()
     }
     jnll -=dexp(exp(log_sigma_loading),rate(3))+log_sigma_loading;
   }
-
+  
   //Ridge prior on environmental covariates
-
+  
   jnll -=(dnorm(beta_e,0,Type(1),true).sum()+
     dexp(sigma_beta_e,exp(rate(4)),true).sum()+log_sigma_beta_e.sum());
-
-
+  
+  
   //~~~~~~~~~~~~~~~~~~~
   ////MSCJS model
   //~~~~~~~~~~~~~~~~~~~
-
-
+  
+  
   // PC priors (Simpson et al 2018)
   //// concatenate all covariates to apply PC priors too
   // DATA_FACTOR(beta_phi_pen_ind);
@@ -1215,22 +1278,22 @@ Type objective_function<Type>::operator() ()
       dexp(exp(log_pen_sds_phi(i)),Type(exp(pen_phi(beta_phi_pen_ind(i)))),true)+
       log_pen_sds_phi(i)); //for change of variables (log_pen_sds is parameter but penalizing pen_sd)
   }
-
+  
   // DATA_FACTOR(beta_p_pen_ind);
   for (int i =0; i <beta_p_pen.size(); i++){
     jnll -= (dnorm(beta_p_pen(i),Type(0),Type(1),true)+
       dexp(exp(log_pen_sds_p(i)),Type(exp(pen_p(beta_p_pen_ind(i)))),true)+
       log_pen_sds_p(i)); //for change of variables (log_pen_sds is parameter but penalizing pen_sd)
   }
-
-
+  
+  
   jnll -= (dnorm(beta_psi_pen,Type(0),Type(1),true).sum()+
     dexp(vector<Type>(exp(log_pen_sds_psi)),Type(exp(pen_psi(0))),true).sum()+
     log_pen_sds_psi.sum()); //for change of variables (log_pen_sds is parameter but penalizing pen_sd)
-
-
+  
+  
   jnll -= dnorm(beta_DOY, beta_DOY_prior(0), beta_DOY_prior(1),true);  // prior on effect of emigration doy on spring/summer subyearling survival in interval 1
-
+  
   jnll -= dnorm(log_f_5_fec, f_5_prior(0), f_5_prior(1),true);
   jnll -= dnorm(logit_RRS, H_RRS_prior(0), H_RRS_prior(1),true);
   //
@@ -1240,13 +1303,13 @@ Type objective_function<Type>::operator() ()
   jnll -=dnorm(exp(pen_rand_phi),pen_prior(0),pen_prior(1),true).sum()+pen_rand_phi.sum();
   jnll -=dnorm(exp(pen_rand_p),pen_prior(0),pen_prior(1),true).sum()+pen_rand_p.sum();
   jnll -=dnorm(exp(pen_rand_psi),pen_prior(0),pen_prior(1),true).sum()+pen_rand_psi.sum();
-
-
+  
+  
   jnll -= dnorm(theta_psi_cor,Type(0.0),Type(0.625),true);
   //---------------------------------------------------------------------------------------------------
-
+  
   //Likelihood
-
+  
   //~~~~~~~~~~~~~~~~~~~
   ////Spawner recruit model
   //~~~~~~~~~~~~~~~~~~~
@@ -1255,7 +1318,7 @@ Type objective_function<Type>::operator() ()
   REPORT(log_J_pred);
   ////  Latent juveniles
   jnll -= dnorm(J_obs , log_J_pred  ,J_obs_sd , true ).sum();
-
+  
   //~~~~~~~~~~~~~~~~~~~
   ////Population process model
   //~~~~~~~~~~~~~~~~~~~
@@ -1269,20 +1332,20 @@ Type objective_function<Type>::operator() ()
   Type u = 0;         // holds the sum of probs after each occasion
   Type NLL_it=0;      // holds the NLL for each CH
   Type tmp = 0;       // holds the prob of a given state during observation process in upstream migration
-
+  
   // SIMULATE
-
+  
   for(int n=0; n<n_unique_CH; n++){ // loop over individual unique capture histories
     pS.setZero(); //initialize at 0,1,0,0 (conditioning at capture)
     pS(1)=Type(1);
     NLL_it=Type(0); //initialize capture history NLL at 0
-
+    
     //downstream migration
     for(int t=f(n); t<nDS_OCC; t++){       //loop over downstream occasions (excluding capture occasion)
       //survival process
       pS(0) += Type((Type(1)-phi(Phi_pim(0)(n,t)))*pS(1)); //prob die or stay dead
       pS(1) *= Type(phi(Phi_pim(0)(n,t))); //prob stay alive
-
+      
       //observation process
       pS(1) *= Type(p(p_pim(0)(n,t))*CH(n,t)+ (Type(1)-p(p_pim(0)(n,t)))*(Type(1)-CH(n,t))); //prob observation given alive
       pS(0) *= Type(Type(1)-CH(n,t)); //prob observation given dead
@@ -1291,7 +1354,7 @@ Type objective_function<Type>::operator() ()
       pS = pS/u; //normalize probs
       NLL_it  +=log(u);    //accumulate nll
     }
-
+    
     //ocean occasion
     int t = nDS_OCC;  //set occasion to be ocean occasion
     ////survival process
@@ -1301,10 +1364,10 @@ Type objective_function<Type>::operator() ()
     pS(2) = pS(1) * psi(Psi_pim(n),1);
     pS(3) = pS(1) * psi(Psi_pim(n),2);
     pS(1) *= psi(Psi_pim(n),0);
-
-
+    
+    
     for(int t=(nDS_OCC+1); t<n_OCC; t++){       //loop over upstream occasions
-
+      
       ////observation process at t-1 (Obs_t below), because I'm going to fix the detection prob at 1 for the last occasion after this loop
       int Obs_t=t-1;
       if(!CH(n,t-1)){
@@ -1321,7 +1384,7 @@ Type objective_function<Type>::operator() ()
       pS = pS/u; //normalize probs
       NLL_it  +=log(u);    //accumulate nll
       //end ocean occasion
-
+      
       //upstream migration
       ////survival process at time t
       pS(0) += Type((Type(1)-phi(Phi_pim(0)(n,t)))*pS(1))+
@@ -1330,9 +1393,9 @@ Type objective_function<Type>::operator() ()
       pS(1) *= Type(phi(Phi_pim(0)(n,t)));                 // sum(prob vec * 0,   phi_1,       0,       0)
       pS(2) *=  Type(phi(Phi_pim(1)(n,t)));                 // sum(prob vec * 0,       0,   phi_2,       0)
       pS(3) *=  Type(phi(Phi_pim(2)(n,t)));                 // sum(prob vec * 0,       0,       0,   phi_3)
-
+      
     }
-
+    
     ////observation process at final time assuming detection probability is 1
     if(!CH(n,(n_OCC-1))){
       pS(1) =  Type(0);
@@ -1348,12 +1411,12 @@ Type objective_function<Type>::operator() ()
     pS = pS/u; //normalize probs
     NLL_it  +=log(u);    //accumulate nll
     //end observation process at final time
-
+    
     //multiply the NLL of an individual CH by the frequency of that CH and subtract from total jnll
     jnll-=(NLL_it*freq(n));
-
+    
   }
-
+  
   vector<matrix<Type> > corr_psi(psi_terms.size());
   vector<vector<Type> > sd_psi(psi_terms.size());
   for(int i=0; i<psi_terms.size(); i++){
@@ -1363,9 +1426,9 @@ Type objective_function<Type>::operator() ()
       sd_psi(i) = psi_terms(i).sd;
     }
   }
-
+  
   REPORT(corr_psi);
   REPORT(eta_long);
-
+  
   return(jnll);
 }
