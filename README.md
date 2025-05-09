@@ -20,7 +20,7 @@ Contains scripts to run all analyses.
 
 **IPM_4\_3_hatch.R** Constructs the integrated population model from an Rdata object `data/dat_IPM_hatch.Rdata` with data and a TMB model `src/IPM_non_centered_hatchery_scenarios.cpp`. Then posterior samples are drawn using tmbstan.
 
-**PVA-preliminary-results-scenarios.Rmd** Conducts population projection simulations assuming different habitat and hatchery management strategies. The outputs from the simulations are saved in the results folder. The script also summarizes the results of the simulations in text and figures. This Rmarkdown script can be knitted to generate the figures in the manuscript.
+**new_plots.R** Conducts population projection simulations assuming different habitat and hatchery management strategies. The outputs from the simulations are saved in the results folder. The script also summarizes the results of the simulations in figures.
 
 ### [Src](./src)
 
@@ -40,19 +40,16 @@ Contains processed data and model inputs. For raw data and to see the steps for 
 
 **broodstock_remova.xlsx** Historical numbers of natural origin fish removed for hatchery broodstock.
 
-**proj_arrays_hatch_8\_11_2022.Rdata** Simulated future trajectories of environmental variables included as covariates in the population .
+**proj_arrays_hatch_8_11_2022.Rdata** Simulated future trajectories of environmental variables included as covariates in the population .
 
 ### [Results](./results)
 
 Contains raw and processed results
 
-**ipm_fit_non_centered_4\_13_hatch_scen.Rdata** The TMB integrated population model object. This is used to conducted the population projections using posterior samples of parameters, simulated environmental variables, and random draws of random effects of year.
+**ipm_fit_non_centered_5_02_hatch_scen.Rdata** The TMB integrated population model object. This is used to conducted the population projections using posterior samples of parameters, simulated environmental variables, and random draws of random effects of year.
 
 **list_of_draws.rda** This file contains posterior samples from the integrated population model.
 
-**list_of_sims_8\_11_22.Rdata** Raw results of population projection simulations under alternative management strategies. This file is too big for GitHub but is available for download on [Zenodo](https://zenodo.org/records/10526151). The 'PVA-preliminary-results-scenarios.Rmd' file has code (line 477) to download the file from Zenodo into the correct place in the file directory.
-
-**summarized_sims_01_17_24.Rdata** Processed and summarized results of population projection simulations.
 
 **2_panel_map_elev_9242021.png** Map used in the manuscript.
 
@@ -82,8 +79,8 @@ viridisLite_0.4.1
 
 ### Details of Article
 
-Sorel MH, RW Zabel, AR Murdoch, and SJ Converse. In review. Management modeling of salmon habitat restoration and hatchery supplementation.
+Sorel MH, RW Zabel, AR Murdoch, and SJ Converse. In prep. Management modeling of salmon habitat restoration and hatchery supplementation.
 
 ### How to Use this Repository
 
-The Rmarkdown file located in the 'scripts' folder is the main scripts for the analysis and can be knit to generate the results in the paper. Several of the steps in that script of circumvented to save time, and results are simply read in from an Rdata file. However, those code chunks that are set to eval=FALSE, could be turned back on to re-generate the results. The IPM_4\_3_hatch.R file in th 'scripts' folder draws posterior samples using tmbstan, but is very computationally and time intensive, so samples have been saved in the results and archived on [Zenodo](https://zenodo.org/records/10526151).
+The `new_plots.R` file located in the 'scripts' folder is the main scripts for the analysis and can be used to generate the results in the paper. The IPM_4_3_hatch.R file in th 'scripts' folder draws posterior samples using tmbstan, but is very computationally and time intensive, so samples have been saved in the results and archived on [Zenodo](https://zenodo.org/records/10526151).

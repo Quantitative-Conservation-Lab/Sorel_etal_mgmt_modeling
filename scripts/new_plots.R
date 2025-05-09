@@ -97,7 +97,6 @@ n_rest<-n_mlts*6+1
 
 
 # object with baseline and reduced hatchery broodstock size targets
-
 BS_size<-matrix(c(74,64),7,2,byrow = T)*seq(0,1.5,by=.25)
 
 gc()
